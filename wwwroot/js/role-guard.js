@@ -287,10 +287,3 @@ AuthManager.updateUI = function() {
   if (originalUpdateUI) originalUpdateUI.call(this);
   RoleGuard.applyVisibility();
 };
-
-// Auto-apply on page load
-document.addEventListener('DOMContentLoaded', () => {
-  if (AuthManager.isAuthenticated()) {
-    RoleGuard.applyVisibility();
-  }
-});

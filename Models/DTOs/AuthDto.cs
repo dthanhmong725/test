@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace DOAN_LAPTRINHWEB.Models.DTOs;
 
@@ -16,11 +17,10 @@ public class RegisterDto
 
     [Required(ErrorMessage = "Mật khẩu không được để trống")]
     [StringLength(100, MinimumLength = 8, ErrorMessage = "Mật khẩu phải có ít nhất 8 ký tự")]
-    [RegularExpression(@"^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':""\\|,.<>\/?]).+$",
-        ErrorMessage = "Mật khẩu phải chứa ít nhất 1 chữ HOA, 1 số, và 1 ký tự đặc biệt")]
     public string Password { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Xác nhận mật khẩu không được để trống")]
+    [JsonPropertyName("confirmPassword")]
     [Compare(nameof(Password), ErrorMessage = "Mật khẩu xác nhận không khớp")]
     public string ConfirmPassword { get; set; } = string.Empty;
 }
@@ -50,11 +50,10 @@ public class ResetPasswordDto
 
     [Required(ErrorMessage = "Mật khẩu mới không được để trống")]
     [StringLength(100, MinimumLength = 8, ErrorMessage = "Mật khẩu phải có ít nhất 8 ký tự")]
-    [RegularExpression(@"^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':""\\|,.<>\/?]).+$",
-        ErrorMessage = "Mật khẩu phải chứa ít nhất 1 chữ HOA, 1 số, và 1 ký tự đặc biệt")]
     public string NewPassword { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Xác nhận mật khẩu không được để trống")]
+    [JsonPropertyName("confirmPassword")]
     [Compare(nameof(NewPassword), ErrorMessage = "Mật khẩu xác nhận không khớp")]
     public string ConfirmPassword { get; set; } = string.Empty;
 }
@@ -66,11 +65,10 @@ public class ChangePasswordDto
 
     [Required(ErrorMessage = "Mật khẩu mới không được để trống")]
     [StringLength(100, MinimumLength = 8, ErrorMessage = "Mật khẩu phải có ít nhất 8 ký tự")]
-    [RegularExpression(@"^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':""\\|,.<>\/?]).+$",
-        ErrorMessage = "Mật khẩu phải chứa ít nhất 1 chữ HOA, 1 số, và 1 ký tự đặc biệt")]
     public string NewPassword { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Xác nhận mật khẩu không được để trống")]
+    [JsonPropertyName("confirmPassword")]
     [Compare(nameof(NewPassword), ErrorMessage = "Mật khẩu xác nhận không khớp")]
     public string ConfirmPassword { get; set; } = string.Empty;
 }
@@ -161,9 +159,9 @@ public class UserManagementDto
 public class SecurityLogDto
 {
     public int Id { get; set; }
-    public int UserId { get; set; }
+    public int? UserId { get; set; }
     public string? Username { get; set; }
-    public string IpAddress { get; set; } = string.Empty;
+    public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
     public string Action { get; set; } = string.Empty;
     public string? Description { get; set; }

@@ -10,7 +10,7 @@
 <body>
   <nav class="navbar">
     <a href="/" class="logo">
-      <i class="ti ti-shield"></i> CyberForum
+      <img src="/logo2-Photoroom.png" alt="CyberForum" style="height: 32px; width: auto;">
     </a>
     <div style="flex: 1;"></div>
     <button class="btn btn-primary" onclick="openNewRoomModal()">
@@ -103,6 +103,7 @@
     let chatRooms = [];
 
     document.addEventListener('DOMContentLoaded', async () => {
+      await AuthManager.restoreSession();
       if (!AuthManager.requireAuth()) return;
       await loadChatRooms();
       await initSignalR();

@@ -11,8 +11,8 @@
 <body style="display: flex; align-items: center; justify-content: center; min-height: 100vh;">
   <div style="width: 100%; max-width: 440px; padding: 24px;">
     <div class="text-center mb-4">
-      <a href="/" style="font-size: 2rem; color: var(--accent); text-decoration: none;">
-        <i class="ti ti-shield" style="font-size: 2.5rem;"></i>
+      <a href="/" style="color: var(--accent); text-decoration: none;">
+        <img src="/logo2-Photoroom.png" alt="CyberForum" style="height: 40px; width: auto;">
       </a>
       <h1 style="font-size: 1.375rem; margin-top: 12px;">Tham gia CyberForum</h1>
       <p class="text-muted" style="font-size: 0.875rem;">Tạo tài khoản để tham gia cộng đồng an ninh mạng</p>
@@ -51,11 +51,11 @@
 
       <div class="form-group">
         <label class="form-label">Mật khẩu</label>
-        <div class="pw-input-wrapper">
+        <div class="pw-input-wrapper" style="position: relative;">
+          <i class="ti ti-lock" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; z-index: 1;"></i>
           <input type="password" name="password" id="passwordInput" class="form-input" placeholder="Tạo mật khẩu mạnh" required minlength="8"
-                 data-strength-check style="padding-right: 40px;">
-          <i class="ti ti-lock" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;"></i>
-          <button type="button" id="togglePassword" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px;">
+                 data-strength-check style="padding-left: 38px; padding-right: 38px;">
+          <button type="button" id="togglePassword" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; z-index: 1;">
             <i class="ti ti-eye"></i>
           </button>
         </div>
@@ -64,11 +64,11 @@
 
       <div class="form-group">
         <label class="form-label">Xác nhận mật khẩu</label>
-        <div class="pw-input-wrapper">
+        <div class="pw-input-wrapper" style="position: relative;">
+          <i class="ti ti-lock" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; z-index: 1;"></i>
           <input type="password" name="confirmPassword" id="confirmInput" class="form-input" placeholder="Nhập lại mật khẩu" required
-                 style="padding-right: 40px; padding-left: 40px;">
-          <i class="ti ti-lock" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;"></i>
-          <button type="button" id="toggleConfirm" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px;">
+                 style="padding-left: 38px; padding-right: 38px;">
+          <button type="button" id="toggleConfirm" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; z-index: 1;">
             <i class="ti ti-eye"></i>
           </button>
         </div>

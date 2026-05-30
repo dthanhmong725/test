@@ -46,7 +46,7 @@ public class Post
     public int CategoryId { get; set; }
 
     [ForeignKey(nameof(CategoryId))]
-    public virtual Category Category { get; set; } = null!;
+    public virtual Category? Category { get; set; }
 
     // Navigation properties
     public virtual ICollection<Comment> Comments { get; set; } = new List<Comment>();

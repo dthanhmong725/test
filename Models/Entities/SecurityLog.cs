@@ -25,10 +25,10 @@ public class SecurityLog
 
     public SecurityAction Action { get; set; }
 
-    public int UserId { get; set; }
+    public int? UserId { get; set; }
 
     [ForeignKey(nameof(UserId))]
-    public virtual User User { get; set; } = null!;
+    public virtual User? User { get; set; }
 
     [StringLength(45)]
     public string? IpAddress { get; set; }

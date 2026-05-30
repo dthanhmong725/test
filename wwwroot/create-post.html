@@ -12,7 +12,7 @@
 <body>
   <nav class="navbar">
     <a href="/" class="logo">
-      <i class="ti ti-shield"></i> CyberForum
+      <img src="/logo2-Photoroom.png" alt="CyberForum" style="height: 32px; width: auto;">
     </a>
   </nav>
 
@@ -79,6 +79,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
+      await AuthManager.restoreSession();
       if (!AuthManager.requireAuth()) return;
 
       quillEditor = new Quill('#editor', {
@@ -111,7 +112,7 @@
 
       try {
         const result = await API.categories.getAll();
-        if (result.success) {
+        if (result.success || result.Success) {
           const select = document.getElementById('categorySelect');
           result.data.forEach(cat => {
             const option = document.createElement('option');
@@ -162,7 +163,7 @@
 
         try {
           const result = await API.posts.create(data);
-          if (result.success) {
+          if (result.success || result.Success) {
             Toast.show('Bài viết đã được đăng thành công!', 'success');
             window.location.href = `/post.html?id=${result.data.id}`;
           } else {

@@ -39,7 +39,7 @@
 
     try {
       const result = await API.bookmarks.toggle(postId);
-      if (!result.success) {
+      if (!result.Success && !result.success) {
         _applyBookmarkUI(btnEl, isBookmarked);
         Toast.show(result.message || 'Có lỗi xảy ra', 'error');
         return;

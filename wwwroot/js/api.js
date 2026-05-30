@@ -1,5 +1,5 @@
 // Cybersecurity Forum - API Client
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = `${window.location.protocol}//${window.location.host}/api`;
 
 class ApiClient {
   constructor() {
@@ -30,27 +30,42 @@ class ApiClient {
         headers
       });
 
-      const data = await response.json();
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        data = await response.text().then(text => {
+          try { return JSON.parse(text); }
+          catch { return { message: text }; }
+        });
+      }
 
       if (!response.ok) {
         if (response.status === 401) {
-          const refreshed = await this._tryRefreshToken();
-          if (refreshed && !response.url.includes('/auth/')) {
-            headers['Authorization'] = `Bearer ${this.token}`;
-            const retryResponse = await fetch(url, { ...options, headers });
-            const retryData = await retryResponse.json();
-            if (!retryResponse.ok) throw new Error(retryData.message || 'Yêu cầu thất bại');
-            return retryData;
-          }
-          if (!response.url.includes('/auth/')) {
+          // Only refresh token for non-auth endpoints
+          if (!url.includes('/auth/')) {
+            const refreshed = await this._tryRefreshToken();
+            if (refreshed) {
+              headers['Authorization'] = `Bearer ${this.token}`;
+              const retryResponse = await fetch(url, { ...options, headers });
+              const retryData = await retryResponse.json();
+              if (!retryResponse.ok) throw new Error(retryData.message || 'Yêu cầu thất bại');
+              return retryData;
+            }
             AuthManager.logout();
           }
         }
-        throw new Error(data.message || 'Yêu cầu thất bại');
+        throw new Error(data.message || `Lỗi ${response.status}: Yêu cầu thất bại`);
       }
 
       return data;
     } catch (error) {
+      // Provide clearer error messages for common issues
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        console.error('API connection failed. URL:', url, 'Error:', error);
+        throw new Error('Không thể kết nối đến máy chủ. Vui lòng kiểm tra máy chủ đang chạy.');
+      }
       console.error('API Error:', error);
       throw error;
     }

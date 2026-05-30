@@ -80,7 +80,7 @@ class AuthManager {
 
     api.setToken(accessToken);
     this._scheduleRefresh();
-    this._persistSession();
+    await this._persistSession();
     this.updateUI();
     await NotificationManager.requestPermission();
   }
@@ -110,14 +110,14 @@ class AuthManager {
     }
     try {
       const result = await API.auth.refresh(this._refreshToken);
-      if (result.success) {
+      if (result.Success || result.success) {
         this._token = result.data.accessToken;
         this._refreshToken = result.data.refreshToken;
         this._user = result.data.user;
         this._tokenExpTime = Date.now() + 15 * 60 * 1000;
         api.setToken(this._token);
         this._scheduleRefresh();
-        this._persistSession();
+        await this._persistSession();
         return true;
       }
     } catch (e) {}
@@ -144,14 +144,12 @@ class AuthManager {
     }
   }
 
-  static _persistSession() {
+  static async _persistSession() {
     try {
-      if (this._user) {
-        sessionStorage.setItem('cf_user', JSON.stringify(this._user));
-      }
-      if (this._tokenExpTime) {
-        sessionStorage.setItem('cf_exp', this._tokenExpTime.toString());
-      }
+      if (this._token) sessionStorage.setItem('cf_token', this._token);
+      if (this._refreshToken) sessionStorage.setItem('cf_refresh', this._refreshToken);
+      if (this._user) sessionStorage.setItem('cf_user', JSON.stringify(this._user));
+      if (this._tokenExpTime) sessionStorage.setItem('cf_exp', this._tokenExpTime.toString());
     } catch (e) {}
   }
 
@@ -159,6 +157,8 @@ class AuthManager {
     try {
       const userStr = sessionStorage.getItem('cf_user');
       const expStr = sessionStorage.getItem('cf_exp');
+      const token = sessionStorage.getItem('cf_token');
+      const refreshToken = sessionStorage.getItem('cf_refresh');
       if (!userStr || !expStr) return false;
 
       const user = JSON.parse(userStr);
@@ -171,16 +171,26 @@ class AuthManager {
 
       this._user = user;
       this._tokenExpTime = exp;
-      api.setToken(null);
-
-      const refreshed = await this.silentRefresh();
-      if (refreshed) {
+      if (token) {
+        this._token = token;
+        this._refreshToken = refreshToken;
+        api.setToken(token);
+        this._scheduleRefresh();
         this.updateUI();
-      } else {
-        this._clearSession();
-        this._clearRefreshTimer();
+        return true;
       }
-      return refreshed;
+
+      api.setToken(null);
+      if (this._refreshToken) {
+        const refreshed = await this.silentRefresh();
+        if (refreshed) {
+          this.updateUI();
+          return true;
+        }
+      }
+      this._clearSession();
+      this._clearRefreshTimer();
+      return false;
     } catch (e) {
       this._clearSession();
       this._clearRefreshTimer();
@@ -194,6 +204,8 @@ class AuthManager {
     this._user = null;
     this._tokenExpTime = null;
     try {
+      sessionStorage.removeItem('cf_token');
+      sessionStorage.removeItem('cf_refresh');
       sessionStorage.removeItem('cf_user');
       sessionStorage.removeItem('cf_exp');
     } catch (e) {}
@@ -289,9 +301,11 @@ class AuthManager {
 // Notification Manager
 class NotificationManager {
   static async requestPermission() {
-    if ('Notification' in window && Notification.permission === 'default') {
-      await Notification.requestPermission();
-    }
+    try {
+      if ('Notification' in window && Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+    } catch (e) {}
   }
 
   static show(title, body, icon = '/icon.png') {

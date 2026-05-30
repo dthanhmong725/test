@@ -81,8 +81,8 @@ public class PostService : IPostService
                 AuthorUsername = p.Author.Username,
                 AuthorAvatar = p.Author.AvatarUrl,
                 AuthorRole = p.Author.Role.ToString(),
-                CategoryName = p.Category.Name,
-                CategorySlug = p.Category.Slug,
+                CategoryName = p.Category!.Name,
+                CategorySlug = p.Category!.Slug,
                 Tags = p.PostTags.Select(pt => pt.Name).ToList()
             })
             .ToListAsync();
@@ -157,15 +157,15 @@ public class PostService : IPostService
             },
             Category = new CategoryDto
             {
-                Id = post.Category.Id,
-                Name = post.Category.Name,
-                Description = post.Category.Description,
-                Icon = post.Category.Icon,
-                Color = post.Category.Color,
-                Slug = post.Category.Slug,
-                DisplayOrder = post.Category.DisplayOrder,
-                IsActive = post.Category.IsActive,
-                PostCount = post.Category.PostCount
+                Id = post.Category!.Id,
+                Name = post.Category!.Name,
+                Description = post.Category!.Description,
+                Icon = post.Category!.Icon,
+                Color = post.Category!.Color,
+                Slug = post.Category!.Slug,
+                DisplayOrder = post.Category!.DisplayOrder,
+                IsActive = post.Category!.IsActive,
+                PostCount = post.Category!.PostCount
             },
             Tags = post.PostTags.Select(pt => pt.Name).ToList(),
             Attachments = post.Attachments.Select(a => new AttachmentDto
@@ -299,7 +299,7 @@ public class PostService : IPostService
             if (newCategory == null)
                 return ApiResponse<PostDto>.ErrorResponse("Danh mục không tồn tại");
 
-            post.Category.PostCount--;
+            post.Category!.PostCount--;
             newCategory.PostCount++;
             post.Category = newCategory;
             post.CategoryId = dto.CategoryId.Value;
@@ -342,9 +342,9 @@ public class PostService : IPostService
             },
             Category = new CategoryDto
             {
-                Id = post.Category.Id,
-                Name = post.Category.Name,
-                Slug = post.Category.Slug
+                Id = post.Category!.Id,
+                Name = post.Category!.Name,
+                Slug = post.Category!.Slug
             },
             Tags = dto.Tags ?? new List<string>()
         }, "Bài viết đã được cập nhật");
@@ -363,7 +363,7 @@ public class PostService : IPostService
             return ApiResponse<bool>.ErrorResponse("Bạn chỉ có thể xóa bài viết của mình");
 
         post.IsDeleted = true;
-        post.Category.PostCount--;
+        post.Category!.PostCount--;
         post.Category = null;
 
         await _context.SaveChangesAsync();

@@ -53,8 +53,8 @@ public class BookmarkService : IBookmarkService
                 AuthorUsername = b.Post.Author.Username,
                 AuthorAvatar = b.Post.Author.AvatarUrl,
                 AuthorRole = b.Post.Author.Role.ToString(),
-                CategoryName = b.Post.Category.Name,
-                CategorySlug = b.Post.Category.Slug,
+                CategoryName = b.Post.Category!.Name,
+                CategorySlug = b.Post.Category!.Slug,
                 Tags = b.Post.PostTags.Select(pt => pt.Name).ToList()
             }
         }).ToList();

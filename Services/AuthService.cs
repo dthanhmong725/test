@@ -353,12 +353,12 @@ public class AuthService : IAuthService
         return Convert.ToBase64String(randomBytes).Replace("+", "").Replace("/", "").Replace("=", "").Substring(0, length);
     }
 
-    private async Task<(string accessToken, string refreshToken, DateTime expiresAt)> GenerateTokensAsync(User user)
+    private Task<(string accessToken, string refreshToken, DateTime expiresAt)> GenerateTokensAsync(User user)
     {
         var accessToken = GenerateJwtToken(user);
         var refreshToken = GenerateSecureToken(64);
         var expiresAt = DateTime.UtcNow.AddDays(7);
-        return (accessToken, refreshToken, expiresAt);
+        return Task.FromResult((accessToken, refreshToken, expiresAt));
     }
 
     private async Task SaveRefreshTokenAsync(int userId, string token, string? ipAddress)

@@ -56,7 +56,7 @@ public class SecurityLogService : ISecurityLogService
             {
                 Id = s.Id,
                 Action = s.Action.ToString(),
-                IpAddress = s.IpAddress,
+                IpAddress = s.IpAddress ?? string.Empty,
                 UserAgent = s.UserAgent,
                 Description = s.Description,
                 IsSuccess = s.IsSuccess,
@@ -102,7 +102,7 @@ public class SecurityLogService : ISecurityLogService
             {
                 Id = s.Id,
                 Action = s.Action.ToString(),
-                IpAddress = s.IpAddress,
+                IpAddress = s.IpAddress ?? string.Empty,
                 UserAgent = s.UserAgent,
                 Description = s.Description,
                 IsSuccess = s.IsSuccess,
