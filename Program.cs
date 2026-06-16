@@ -45,17 +45,25 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero
     };
 
-    // Support JWT from cookies
+    // Support JWT from cookies AND Authorization Bearer header
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
         {
-            if (context.Request.Cookies.TryGetValue("access_token", out var cookieToken))
+            // Priority 1: Authorization: Bearer <token> header (used by frontend api.js)
+            var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer "))
+            {
+                context.Token = authHeader.Substring("Bearer ".Length).Trim();
+            }
+            // Priority 2: Cookie (fallback)
+            else if (context.Request.Cookies.TryGetValue("access_token", out var cookieToken))
             {
                 context.Token = cookieToken;
             }
             else
             {
+                // Priority 3: Query string for SignalR hubs
                 var accessToken = context.Request.Query["access_token"];
                 var path = context.HttpContext.Request.Path;
                 if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))

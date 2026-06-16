@@ -67,6 +67,13 @@ public class AdminController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("dashboard")]
+    public async Task<IActionResult> GetDashboard([FromQuery] int days = 14)
+    {
+        var result = await _roleService.GetDashboardStatsAsync(days);
+        return Ok(result);
+    }
+
     [HttpGet("security-logs")]
     [Authorize(Policy = AuthorizationPolicies.RequireModerator)]
     public async Task<IActionResult> GetSecurityLogs(

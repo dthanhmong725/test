@@ -135,6 +135,9 @@ class ApiClient {
   }
 }
 
+// Khởi tạo ApiClient TRƯỚC khi định nghĩa API object (vì API dùng `api` bên trong)
+const api = new ApiClient();
+
 // API endpoints
 const API = {
   auth: {
@@ -226,7 +229,8 @@ const API = {
     changeRole: (id, role) => api.put(`/admin/users/${id}/role?newRole=${role}`),
     banUser: (id, reason) => api.post(`/admin/users/${id}/ban?reason=${encodeURIComponent(reason)}`),
     unbanUser: (id) => api.post(`/admin/users/${id}/unban`),
-    getSecurityLogs: (params) => api.get('/admin/security-logs', params)
+    getSecurityLogs: (params) => api.get('/admin/security-logs', params),
+    getDashboard: (params) => api.get('/admin/dashboard', params)
   },
 
   security: {
@@ -240,5 +244,3 @@ const API = {
     markAllAsRead: () => api.put('/notifications/read-all')
   }
 };
-
-const api = new ApiClient();

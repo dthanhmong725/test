@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tìm kiếm - CyberForum</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/themes/cyber.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/" class="logo">
+      <img src="/logo2-Photoroom.png" alt="CyberForum" style="height: 32px; width: auto;">
+    </a>
+
+    <div class="search-box">
+      <div class="search-wrapper">
+        <i class="ti ti-search search-icon"></i>
+        <input type="search" id="globalSearch" class="search-input" placeholder="Tìm kiếm bài viết, thành viên, chủ đề...">
+      </div>
+    </div>
+
+    <div class="navbar-right" style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+      <div class="auth-buttons" style="display: flex; gap: 8px;">
+        <a href="/login.html" class="btn btn-ghost btn-nav">Đăng nhập</a>
+        <a href="/register.html" class="btn btn-primary btn-nav">Đăng ký</a>
+      </div>
+      <div class="user-menu" style="display: none; align-items: center; gap: 8px;">
+        <a href="/create-post.html" class="btn btn-primary btn-nav requires-auth">
+          <i class="ti ti-plus"></i> Bài mới
+        </a>
+        <button class="btn btn-ghost btn-icon" id="notificationBtn" title="Thông báo" style="position:relative;">
+          <i class="ti ti-bell"></i>
+        </button>
+        <div style="position: relative;">
+          <button class="btn btn-ghost btn-user" id="userMenuBtn">
+            <div class="avatar avatar-sm user-avatar">U</div>
+            <span class="user-name">Người dùng</span>
+            <i class="ti ti-chevron-down" style="font-size: 0.75rem;"></i>
+          </button>
+          <div id="userDropdown" style="display: none; position: absolute; top: calc(100% + 8px); right: 0; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 6px; min-width: 200px; z-index: 1000;">
+            <a href="/profile.html" class="nav-item" style="padding: 8px 12px; display: flex; align-items: center; gap: 8px;">
+              <i class="ti ti-user"></i> Hồ sơ
+            </a>
+            <a href="/bookmarks.html" class="nav-item" style="padding: 8px 12px; display: flex; align-items: center; gap: 8px;">
+              <i class="ti ti-bookmark"></i> Đã lưu
+            </a>
+            <a href="/change-password.html" class="nav-item" style="padding: 8px 12px; display: flex; align-items: center; gap: 8px;">
+              <i class="ti ti-settings"></i> Cài đặt
+            </a>
+            <div style="height: 1px; background: var(--border); margin: 6px 0;"></div>
+            <a href="#" id="logoutBtn" class="nav-item" style="padding: 8px 12px; color: var(--accent-red); display: flex; align-items: center; gap: 8px;">
+              <i class="ti ti-logout"></i> Đăng xuất
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main style="padding-top: calc(var(--navbar-height) + 20px);">
+    <div class="container" style="max-width: 900px;">
+
+      <!-- Search header -->
+      <div style="margin-bottom: 20px;">
+        <h1 style="font-size: 1.375rem; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+          <i class="ti ti-search" style="color: var(--accent);"></i>
+          Kết quả tìm kiếm
+        </h1>
+        <p id="resultSummary" style="color: var(--text-muted); font-size: 0.875rem; margin: 0;"></p>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="d-flex justify-between align-center mb-4" style="margin-bottom: 16px;">
+        <div class="d-flex gap-2 align-center">
+          <select id="sortSelect" class="form-select" style="width: auto; padding: 6px 12px;">
+            <option value="">Mới nhất</option>
+            <option value="views">Xem nhiều nhất</option>
+            <option value="comments">Bình luận nhiều nhất</option>
+            <option value="oldest">Cũ nhất</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="postsList">
+        <div class="skeleton" style="height: 110px; margin-bottom: 12px;"></div>
+        <div class="skeleton" style="height: 110px; margin-bottom: 12px;"></div>
+        <div class="skeleton" style="height: 110px;"></div>
+      </div>
+
+      <div id="pagination" class="pagination" style="margin-top: 16px;"></div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/role-guard.js"></script>
+  <script src="/js/notification-bell.js"></script>
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    let query = urlParams.get('q') || '';
+    let currentPage = 1;
+
+    async function init() {
+      await AuthManager.restoreSession();
+      AuthManager.updateUI();
+      RoleGuard.applyVisibility();
+
+      document.getElementById('globalSearch').value = query;
+
+      await loadPosts(1);
+      setupEventListeners();
+    }
+
+    async function loadPosts(page = 1) {
+      currentPage = page;
+      const sort = document.getElementById('sortSelect').value;
+
+      const container = document.getElementById('postsList');
+      container.innerHTML = `
+        <div class="skeleton" style="height: 110px; margin-bottom: 12px;"></div>
+        <div class="skeleton" style="height: 110px; margin-bottom: 12px;"></div>`;
+
+      if (!query.trim()) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <i class="ti ti-search"></i>
+            <h3>Nhập từ khóa để tìm kiếm</h3>
+            <p>Tìm theo tiêu đề hoặc nội dung bài viết.</p>
+          </div>`;
+        document.getElementById('resultSummary').textContent = '';
+        document.getElementById('pagination').innerHTML = '';
+        return;
+      }
+
+      document.getElementById('resultSummary').textContent = `Đang tìm kiếm cho "${query}"...`;
+
+      try {
+        const result = await API.posts.getAll({ page, pageSize: 10, search: query, sortBy: sort });
+        if (!result.success) {
+          container.innerHTML = `<div class="empty-state"><i class="ti ti-alert-circle"></i><h3>Lỗi khi tìm kiếm</h3></div>`;
+          return;
+        }
+
+        const posts = result.data || [];
+        document.getElementById('resultSummary').textContent =
+          `Tìm thấy ${result.totalItems} kết quả cho "${query}"`;
+
+        if (!posts.length) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <i class="ti ti-mood-empty"></i>
+              <h3>Không tìm thấy kết quả</h3>
+              <p>Hãy thử từ khóa khác hoặc kiểm tra lại chính tả.</p>
+            </div>`;
+          document.getElementById('pagination').innerHTML = '';
+          return;
+        }
+
+        container.innerHTML = posts.map(post => renderPostCard(post)).join('');
+        renderPagination(result);
+      } catch (e) {
+        container.innerHTML = `<div class="empty-state"><i class="ti ti-alert-circle"></i><h3>Lỗi khi tìm kiếm</h3></div>`;
+      }
+    }
+
+    function renderPostCard(post) {
+      return `
+        <article class="post-card ${post.isPinned ? 'pinned' : ''}">
+          <div class="post-votes">
+            <button class="vote-btn ${post.userVote === 1 ? 'upvoted' : ''}" onclick="votePost(${post.id}, true)">
+              <i class="ti ti-arrow-up"></i>
+            </button>
+            <span class="vote-count ${post.upvoteCount - post.downvoteCount > 0 ? 'positive' : post.upvoteCount - post.downvoteCount < 0 ? 'negative' : ''}">
+              ${post.upvoteCount - post.downvoteCount}
+            </span>
+            <button class="vote-btn ${post.userVote === -1 ? 'downvoted' : ''}" onclick="votePost(${post.id}, false)">
+              <i class="ti ti-arrow-down"></i>
+            </button>
+          </div>
+          <div class="post-content">
+            <div class="d-flex justify-between align-start gap-2">
+              <a href="/post.html?id=${post.id}" class="post-title" style="text-decoration: none;">
+                ${post.isPinned ? '<span class="badge badge-success" style="margin-right: 6px; font-size: 0.625rem;"><i class="ti ti-pinned"></i> Đã ghim</span>' : ''}
+                ${post.isLocked ? '<i class="ti ti-lock" style="color: var(--text-muted); margin-right: 4px;"></i>' : ''}
+                ${post.title}
+              </a>
+            </div>
+            <div class="post-meta">
+              <div class="d-flex align-center gap-2">
+                <div class="avatar avatar-sm">${(post.authorUsername || 'U').charAt(0).toUpperCase()}</div>
+                <a href="/profile.html?username=${post.authorUsername}" style="color: inherit; text-decoration: none;">
+                  <span>${post.authorUsername}</span>
+                  ${post.authorRole && post.authorRole !== 'User' ? RoleGuard.renderRoleBadge(post.authorRole) : ''}
+                </a>
+              </div>
+              <span class="post-meta-item"><i class="ti ti-clock"></i> ${formatTimeAgo(post.createdAt)}</span>
+              <span class="post-meta-item"><i class="ti ti-eye"></i> ${post.viewCount}</span>
+              <span class="post-meta-item"><i class="ti ti-message"></i> ${post.commentCount}</span>
+              <a href="/category.html?slug=${post.categorySlug}" class="category-tag ${post.categorySlug}" style="text-decoration: none;">
+                ${post.categoryName}
+              </a>
+            </div>
+            ${post.tags && post.tags.length ? `
+              <div class="post-tags">
+                ${post.tags.map(tag => `<span class="post-tag">${tag}</span>`).join('')}
+              </div>
+            ` : ''}
+          </div>
+          <button class="btn btn-ghost bookmark-btn ${post.isBookmarked ? 'bookmarked' : ''}"
+            onclick="toggleBookmark(${post.id}, this)" style="align-self: flex-start; color: ${post.isBookmarked ? 'var(--accent)' : ''};">
+            <i class="${post.isBookmarked ? 'ti ti-bookmark-filled' : 'ti ti-bookmark'}"></i>
+          </button>
+        </article>`;
+    }
+
+    function renderPagination(result) {
+      const container = document.getElementById('pagination');
+      const totalPages = Math.ceil(result.totalItems / result.pageSize);
+      if (totalPages <= 1) { container.innerHTML = ''; return; }
+
+      let html = '';
+      const current = result.page;
+      if (current > 1) html += `<button class="pagination-btn" onclick="loadPosts(${current - 1})"><i class="ti ti-chevron-left"></i></button>`;
+      for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= current - 1 && i <= current + 1)) {
+          html += `<button class="pagination-btn ${i === current ? 'active' : ''}" onclick="loadPosts(${i})">${i}</button>`;
+        } else if (i === current - 2 || i === current + 2) {
+          html += `<span style="color: var(--text-muted); padding: 0 4px;">...</span>`;
+        }
+      }
+      if (current < totalPages) html += `<button class="pagination-btn" onclick="loadPosts(${current + 1})"><i class="ti ti-chevron-right"></i></button>`;
+      container.innerHTML = html;
+    }
+
+    function setupEventListeners() {
+      document.getElementById('sortSelect').addEventListener('change', () => loadPosts(1));
+
+      const searchInput = document.getElementById('globalSearch');
+      let searchTimeout;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+          if (searchInput.value.trim().length >= 3) {
+            query = searchInput.value.trim();
+            history.replaceState(null, '', `/search.html?q=${encodeURIComponent(query)}`);
+            loadPosts(1);
+          } else if (searchInput.value.trim().length === 0) {
+            query = '';
+            history.replaceState(null, '', '/search.html');
+            loadPosts(1);
+          }
+        }, 500);
+      });
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && searchInput.value.trim().length >= 1) {
+          clearTimeout(searchTimeout);
+          query = searchInput.value.trim();
+          history.replaceState(null, '', `/search.html?q=${encodeURIComponent(query)}`);
+          loadPosts(1);
+        }
+      });
+
+      const userMenuBtn = document.getElementById('userMenuBtn');
+      const userDropdown = document.getElementById('userDropdown');
+      if (userMenuBtn) {
+        userMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); userDropdown.style.display = userDropdown.style.display === 'none' ? 'block' : 'none'; });
+      }
+      document.addEventListener('click', () => { if (userDropdown) userDropdown.style.display = 'none'; });
+      document.getElementById('logoutBtn')?.addEventListener('click', (e) => { e.preventDefault(); AuthManager.logout(); });
+    }
+
+    async function votePost(postId, isUpvote) {
+      if (!AuthManager.isAuthenticated()) { Toast.show('Vui lòng đăng nhập để bình chọn', 'warning'); return; }
+      try {
+        await API.posts.vote(postId, isUpvote);
+        await loadPosts(currentPage);
+      } catch (e) { Toast.show(e.message, 'error'); }
+    }
+
+    async function toggleBookmark(postId, btn) {
+      if (!AuthManager.isAuthenticated()) { Toast.show('Vui lòng đăng nhập để lưu bài', 'warning'); return; }
+      const isBookmarked = btn.classList.contains('bookmarked');
+      try {
+        if (isBookmarked) {
+          await API.posts.removeBookmark(postId);
+          btn.classList.remove('bookmarked');
+          btn.style.color = '';
+          btn.querySelector('i').className = 'ti ti-bookmark';
+        } else {
+          await API.posts.addBookmark(postId);
+          btn.classList.add('bookmarked');
+          btn.style.color = 'var(--accent)';
+          btn.querySelector('i').className = 'ti ti-bookmark-filled';
+        }
+        Toast.show(isBookmarked ? 'Đã bỏ lưu' : 'Đã lưu bài viết', 'success');
+      } catch (e) { Toast.show(e.message, 'error'); }
+    }
+
+    function formatTimeAgo(dateString) {
+      const date = new Date(dateString);
+      const now = new Date();
+      const seconds = Math.floor((now - date) / 1000);
+      if (seconds < 60) return 'vài giây trước';
+      if (seconds < 3600) return `${Math.floor(seconds / 60)} phút trước`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)} giờ trước`;
+      if (seconds < 604800) return `${Math.floor(seconds / 86400)} ngày trước`;
+      return date.toLocaleDateString('vi-VN', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

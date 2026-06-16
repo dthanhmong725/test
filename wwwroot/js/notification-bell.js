@@ -149,9 +149,12 @@ class NotificationBell {
     if (!AuthManager.isAuthenticated()) return;
     try {
       const result = await API.notifications.getUnreadCount();
-      const count = result?.data?.unreadCount ?? 0;
+      // Hỗ trợ cả camelCase lẫn PascalCase từ server
+      const count = result?.data?.unreadCount ?? result?.Data?.unreadCount ?? result?.data?.UnreadCount ?? 0;
       this._renderBadge(count);
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[NotificationBell] _fetchCount error:', e.message);
+    }
   }
 
   static async _fetchNotifications() {
@@ -164,15 +167,21 @@ class NotificationBell {
     }
     try {
       const result = await API.notifications.getAll({ page: 1, pageSize: 20 });
-      if (result?.success) {
-        this._notifications = result.data || [];
+      // Hỗ trợ cả camelCase (success) và PascalCase (Success)
+      const ok = result?.success ?? result?.Success ?? false;
+      if (ok) {
+        this._notifications = result.data ?? result.Data ?? [];
         this._renderList();
+      } else {
+        throw new Error(result?.message || result?.Message || 'API trả về thất bại');
       }
     } catch (e) {
+      console.error('[NotificationBell] _fetchNotifications error:', e);
       if (list) list.innerHTML = `
         <div style="display:flex;flex-direction:column;align-items:center;padding:40px;gap:8px;color:var(--text-muted,#7d8590);">
           <i class="ti ti-wifi-off" style="font-size:2rem;"></i>
           <span>Không thể tải thông báo</span>
+          <span style="font-size:0.7rem;opacity:0.5;">${e.message || ''}</span>
         </div>`;
     }
   }

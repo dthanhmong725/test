@@ -7,6 +7,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/css/themes/cyber.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body style="background: var(--bg-primary); min-height: 100vh;">
   <div class="page-wrapper">
@@ -51,10 +52,16 @@
         <!-- Tab Navigation -->
         <div class="card" style="padding: 0; margin-bottom: 20px; overflow: hidden;">
           <div style="display: flex; border-bottom: 1px solid var(--border); overflow-x: auto;">
-            <button class="admin-tab active" data-tab="users" style="
+            <button class="admin-tab active" data-tab="dashboard" style="
               padding: 12px 20px; background: none; border: none; cursor: pointer;
               font-size: 0.875rem; font-weight: 500; color: var(--accent);
               border-bottom: 2px solid var(--accent); white-space: nowrap;">
+              <i class="ti ti-chart-bar"></i> Thống kê
+            </button>
+            <button class="admin-tab" data-tab="users" style="
+              padding: 12px 20px; background: none; border: none; cursor: pointer;
+              font-size: 0.875rem; font-weight: 500; color: var(--text-muted);
+              border-bottom: 2px solid transparent; white-space: nowrap;">
               <i class="ti ti-users"></i> Người dùng
             </button>
             <button class="admin-tab" data-tab="security" style="
@@ -71,8 +78,54 @@
             </button>
           </div>
 
+          <!-- Dashboard Tab -->
+          <div id="tab-dashboard" class="admin-tab-content" style="padding: 20px;">
+            <!-- Stat cards -->
+            <div id="statCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px;">
+              <div class="skeleton" style="height: 90px; border-radius: var(--radius-md);"></div>
+              <div class="skeleton" style="height: 90px; border-radius: var(--radius-md);"></div>
+              <div class="skeleton" style="height: 90px; border-radius: var(--radius-md);"></div>
+              <div class="skeleton" style="height: 90px; border-radius: var(--radius-md);"></div>
+            </div>
+
+            <!-- Growth chart -->
+            <div class="card" style="padding: 16px; margin-bottom: 20px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <h3 style="font-size: 0.9375rem; margin: 0;">Tăng trưởng 14 ngày gần nhất</h3>
+                <div style="display: flex; gap: 14px; font-size: 0.75rem; color: var(--text-muted);">
+                  <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3fb950;margin-right:4px;"></span>Người dùng</span>
+                  <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#388bfd;margin-right:4px;"></span>Bài viết</span>
+                  <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#d29922;margin-right:4px;"></span>Bình luận</span>
+                </div>
+              </div>
+              <div style="position: relative; height: 260px;">
+                <canvas id="growthChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Two-column: role distribution + top categories/users -->
+            <div style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 16px;">
+              <div class="card" style="padding: 16px;">
+                <h3 style="font-size: 0.9375rem; margin-bottom: 12px;">Phân bổ vai trò</h3>
+                <div style="position: relative; height: 200px; display: flex; justify-content: center;">
+                  <canvas id="roleChart"></canvas>
+                </div>
+              </div>
+
+              <div class="card" style="padding: 16px;">
+                <h3 style="font-size: 0.9375rem; margin-bottom: 12px;">Top danh mục theo bài viết</h3>
+                <div id="topCategoriesList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+              </div>
+            </div>
+
+            <div class="card" style="padding: 16px; margin-top: 16px;">
+              <h3 style="font-size: 0.9375rem; margin-bottom: 12px;">Top thành viên theo điểm uy tín</h3>
+              <div id="topUsersList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+          </div>
+
           <!-- Users Tab -->
-          <div id="tab-users" class="admin-tab-content" style="padding: 20px;">
+          <div id="tab-users" class="admin-tab-content" style="padding: 20px; display: none;">
             <!-- Filters -->
             <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
               <div style="flex: 1; min-width: 200px;">
@@ -254,7 +307,7 @@
         AuthManager.updateUI();
         this.setupTabs();
         this.setupSearch();
-        this.loadUsers(1);
+        this.loadDashboard();
         this.renderPermissionMatrix();
         RoleGuard.applyVisibility();
       },
@@ -276,6 +329,10 @@
 
             if (tab.dataset.tab === 'security') {
               this.loadSecurityLogs(1);
+            } else if (tab.dataset.tab === 'users') {
+              this.loadUsers(1);
+            } else if (tab.dataset.tab === 'dashboard') {
+              this.loadDashboard();
             }
           });
         });
@@ -571,6 +628,165 @@
       renderPermissionMatrix() {
         const container = document.getElementById('permissionMatrix');
         container.innerHTML = RoleGuard.buildPermissionMatrix();
+      },
+
+      growthChartInstance: null,
+      roleChartInstance: null,
+
+      async loadDashboard() {
+        try {
+          const result = await API.admin.getDashboard({ days: 14 });
+          if (!result.success) {
+            Toast.show(result.message || 'Không thể tải thống kê', 'error');
+            return;
+          }
+          const stats = result.data;
+          this.renderStatCards(stats);
+          this.renderGrowthChart(stats);
+          this.renderRoleChart(stats);
+          this.renderTopCategories(stats.topCategories);
+          this.renderTopUsers(stats.topUsers);
+        } catch (e) {
+          Toast.show('Lỗi khi tải dữ liệu thống kê', 'error');
+        }
+      },
+
+      renderStatCards(stats) {
+        const cards = [
+          { label: 'Tổng người dùng', value: stats.totalUsers, sub: `+${stats.newUsersToday} hôm nay`, icon: 'ti-users', color: '#3fb950' },
+          { label: 'Tổng bài viết', value: stats.totalPosts, sub: `+${stats.newPostsToday} hôm nay`, icon: 'ti-article', color: '#388bfd' },
+          { label: 'Tổng bình luận', value: stats.totalComments, sub: `+${stats.newCommentsToday} hôm nay`, icon: 'ti-message', color: '#d29922' },
+          { label: 'Tài khoản bị khóa', value: stats.bannedUsers, sub: `trên ${stats.totalUsers} người dùng`, icon: 'ti-ban', color: '#f85149' }
+        ];
+
+        document.getElementById('statCards').innerHTML = cards.map(c => `
+          <div class="card" style="padding: 16px; display: flex; align-items: center; gap: 12px;">
+            <div style="width: 44px; height: 44px; border-radius: var(--radius-md); background: ${c.color}1a; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <i class="ti ${c.icon}" style="color: ${c.color}; font-size: 1.25rem;"></i>
+            </div>
+            <div>
+              <div style="font-size: 1.375rem; font-weight: 700; line-height: 1.1;">${c.value.toLocaleString('vi-VN')}</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">${c.label}</div>
+              <div style="font-size: 0.6875rem; color: ${c.color};">${c.sub}</div>
+            </div>
+          </div>
+        `).join('');
+      },
+
+      renderGrowthChart(stats) {
+        const labels = stats.userGrowth.map(d => {
+          const [y, m, day] = d.date.split('-');
+          return `${day}/${m}`;
+        });
+
+        const ctx = document.getElementById('growthChart');
+        if (this.growthChartInstance) this.growthChartInstance.destroy();
+
+        this.growthChartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'Người dùng',
+                data: stats.userGrowth.map(d => d.count),
+                borderColor: '#3fb950',
+                backgroundColor: '#3fb95022',
+                tension: 0.3,
+                fill: true,
+                pointRadius: 2
+              },
+              {
+                label: 'Bài viết',
+                data: stats.postGrowth.map(d => d.count),
+                borderColor: '#388bfd',
+                backgroundColor: '#388bfd22',
+                tension: 0.3,
+                fill: true,
+                pointRadius: 2
+              },
+              {
+                label: 'Bình luận',
+                data: stats.commentGrowth.map(d => d.count),
+                borderColor: '#d29922',
+                backgroundColor: '#d2992222',
+                tension: 0.3,
+                fill: true,
+                pointRadius: 2
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#8b949e', font: { size: 11 } }, grid: { color: '#30363d33' } },
+              y: { beginAtZero: true, ticks: { color: '#8b949e', font: { size: 11 }, precision: 0 }, grid: { color: '#30363d33' } }
+            }
+          }
+        });
+      },
+
+      renderRoleChart(stats) {
+        const ctx = document.getElementById('roleChart');
+        if (this.roleChartInstance) this.roleChartInstance.destroy();
+
+        this.roleChartInstance = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Người dùng', 'Điều hành viên', 'Quản trị viên'],
+            datasets: [{
+              data: [stats.regularUserCount, stats.moderatorCount, stats.adminCount],
+              backgroundColor: ['#388bfd', '#d29922', '#f85149'],
+              borderWidth: 0
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom', labels: { color: '#8b949e', font: { size: 11 }, boxWidth: 10 } }
+            }
+          }
+        });
+      },
+
+      renderTopCategories(categories) {
+        const container = document.getElementById('topCategoriesList');
+        if (!categories || !categories.length) {
+          container.innerHTML = `<p style="color: var(--text-muted); font-size: 0.8125rem;">Chưa có dữ liệu.</p>`;
+          return;
+        }
+        const max = Math.max(...categories.map(c => c.postCount), 1);
+        container.innerHTML = categories.map(c => `
+          <div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.8125rem; margin-bottom: 4px;">
+              <span>${c.name}</span>
+              <span style="color: var(--text-muted);">${c.postCount} bài</span>
+            </div>
+            <div style="height: 6px; background: var(--bg-surface2); border-radius: 4px; overflow: hidden;">
+              <div style="height: 100%; width: ${(c.postCount / max) * 100}%; background: ${c.color};"></div>
+            </div>
+          </div>
+        `).join('');
+      },
+
+      renderTopUsers(users) {
+        const container = document.getElementById('topUsersList');
+        if (!users || !users.length) {
+          container.innerHTML = `<p style="color: var(--text-muted); font-size: 0.8125rem;">Chưa có dữ liệu.</p>`;
+          return;
+        }
+        container.innerHTML = users.map((u, i) => `
+          <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; ${i < users.length - 1 ? 'border-bottom: 1px solid var(--border);' : ''}">
+            <span style="width: 20px; text-align: center; font-size: 0.8125rem; color: var(--text-muted); font-weight: 600;">${i + 1}</span>
+            <span class="avatar avatar-sm">${u.username.charAt(0).toUpperCase()}</span>
+            <span style="flex: 1; font-size: 0.875rem;">@${u.username}</span>
+            ${AuthManager.renderRoleBadge ? AuthManager.renderRoleBadge(u.role) : ''}
+            <span style="font-weight: 600; color: var(--accent); font-size: 0.875rem;">${u.reputationPoints} điểm</span>
+          </div>
+        `).join('');
       }
     };
 

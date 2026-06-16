@@ -20,14 +20,16 @@ public class NotificationService : INotificationService
         // Không tạo thông báo tự gửi cho chính mình
         if (recipientId == actorId) return;
 
-        // Kiểm tra đã có thông báo tương tự chưa đọc để tránh spam
+        // Kiểm tra đã có thông báo tương tự chưa đọc trong vòng 1 giờ qua để tránh spam
+        var oneHourAgo = DateTime.UtcNow.AddHours(-1);
         var existing = await _db.Notifications.AnyAsync(n =>
             n.RecipientId == recipientId &&
             n.ActorId == actorId &&
             n.Type == type &&
             n.PostId == postId &&
             n.CommentId == commentId &&
-            !n.IsRead);
+            !n.IsRead &&
+            n.CreatedAt >= oneHourAgo);
 
         if (existing) return;
 

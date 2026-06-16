@@ -84,7 +84,10 @@ class AuthManager {
     this.updateUI();
     await NotificationManager.requestPermission();
     // Khởi tạo notification bell sau khi đăng nhập
-    if (typeof NotificationBell !== 'undefined') NotificationBell.init();
+    if (typeof NotificationBell !== 'undefined') {
+      NotificationBell._initialized = false;
+      NotificationBell.init();
+    }
   }
 
   static async logout() {

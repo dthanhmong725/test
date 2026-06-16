@@ -177,6 +177,115 @@ public class RoleService : IRoleService
         return ApiResponse<List<SecurityLogDto>>.SuccessResponse(logs);
     }
 
+    public async Task<ApiResponse<DashboardStatsDto>> GetDashboardStatsAsync(int days = 14)
+    {
+        var now = DateTime.UtcNow;
+        var todayStart = now.Date;
+        var rangeStart = todayStart.AddDays(-(days - 1));
+
+        var totalUsers = await _context.Users.CountAsync();
+        var totalPosts = await _context.Posts.CountAsync(p => !p.IsDeleted);
+        var totalComments = await _context.Comments.CountAsync(c => !c.IsDeleted);
+        var totalCategories = await _context.Categories.CountAsync();
+        var bannedUsers = await _context.Users.CountAsync(u => u.IsBanned);
+
+        var newUsersToday = await _context.Users.CountAsync(u => u.CreatedAt >= todayStart);
+        var newPostsToday = await _context.Posts.CountAsync(p => !p.IsDeleted && p.CreatedAt >= todayStart);
+        var newCommentsToday = await _context.Comments.CountAsync(c => !c.IsDeleted && c.CreatedAt >= todayStart);
+
+        var adminCount = await _context.Users.CountAsync(u => u.Role == UserRole.Admin);
+        var moderatorCount = await _context.Users.CountAsync(u => u.Role == UserRole.Moderator);
+        var regularUserCount = totalUsers - adminCount - moderatorCount;
+
+        // Dữ liệu thô trong khoảng ngày cần thống kê, gom nhóm theo ngày tại phía client (C#)
+        // để tránh phụ thuộc vào hàm SQL cụ thể (SQLite/SQL Server khác nhau khi group theo Date)
+        var rawUsers = await _context.Users
+            .Where(u => u.CreatedAt >= rangeStart)
+            .Select(u => u.CreatedAt)
+            .ToListAsync();
+
+        var rawPosts = await _context.Posts
+            .Where(p => !p.IsDeleted && p.CreatedAt >= rangeStart)
+            .Select(p => p.CreatedAt)
+            .ToListAsync();
+
+        var rawComments = await _context.Comments
+            .Where(c => !c.IsDeleted && c.CreatedAt >= rangeStart)
+            .Select(c => c.CreatedAt)
+            .ToListAsync();
+
+        var userGrowth = BuildDailyCounts(rawUsers, rangeStart, days);
+        var postGrowth = BuildDailyCounts(rawPosts, rangeStart, days);
+        var commentGrowth = BuildDailyCounts(rawComments, rangeStart, days);
+
+        var topCategories = await _context.Categories
+            .Where(c => c.IsActive)
+            .Select(c => new CategoryStatDto
+            {
+                Name = c.Name,
+                Color = c.Color,
+                PostCount = c.Posts.Count(p => !p.IsDeleted)
+            })
+            .OrderByDescending(c => c.PostCount)
+            .Take(5)
+            .ToListAsync();
+
+        var topUsers = await _context.Users
+            .OrderByDescending(u => u.ReputationPoints)
+            .Take(5)
+            .Select(u => new TopUserStatDto
+            {
+                Id = u.Id,
+                Username = u.Username,
+                AvatarUrl = u.AvatarUrl,
+                ReputationPoints = u.ReputationPoints,
+                Role = u.Role.ToString()
+            })
+            .ToListAsync();
+
+        var stats = new DashboardStatsDto
+        {
+            TotalUsers = totalUsers,
+            TotalPosts = totalPosts,
+            TotalComments = totalComments,
+            TotalCategories = totalCategories,
+            BannedUsers = bannedUsers,
+            NewUsersToday = newUsersToday,
+            NewPostsToday = newPostsToday,
+            NewCommentsToday = newCommentsToday,
+            UserGrowth = userGrowth,
+            PostGrowth = postGrowth,
+            CommentGrowth = commentGrowth,
+            AdminCount = adminCount,
+            ModeratorCount = moderatorCount,
+            RegularUserCount = regularUserCount,
+            TopCategories = topCategories,
+            TopUsers = topUsers
+        };
+
+        return ApiResponse<DashboardStatsDto>.SuccessResponse(stats);
+    }
+
+    private static List<DailyCountDto> BuildDailyCounts(List<DateTime> timestamps, DateTime rangeStart, int days)
+    {
+        var counts = timestamps
+            .GroupBy(t => t.Date)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var result = new List<DailyCountDto>();
+        for (int i = 0; i < days; i++)
+        {
+            var day = rangeStart.AddDays(i);
+            result.Add(new DailyCountDto
+            {
+                Date = day.ToString("yyyy-MM-dd"),
+                Count = counts.TryGetValue(day, out var c) ? c : 0
+            });
+        }
+
+        return result;
+    }
+
     private async Task LogSecurityEventAsync(int userId, SecurityAction action, string details, bool isSuccess = true)
     {
         await _securityLogService.LogAsync(userId, action, "system", null, details, isSuccess);
