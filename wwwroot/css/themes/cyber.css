@@ -574,7 +574,7 @@ code { background: rgba(255,255,255,0.06); padding: 3px 6px; border-radius: 6px;
 button:focus { outline: none; box-shadow: none; }
 
 /* Toast */
-.toast-container { position: fixed; bottom: 30px; right: 30px; z-index: 3000; display: flex; flex-direction: column; gap: 10px; }
+.toast-container { position: fixed; bottom: 30px; right: 30px; z-index: 999999 !important; display: flex; flex-direction: column; gap: 10px; }
 .toast {
   display: flex; align-items: center; gap: 12px; padding: 14px 20px; 
   background: var(--bg-surface) !important; backdrop-filter: blur(12px);

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
@@ -212,6 +212,21 @@
           <div class="post-body" style="line-height: 1.8; margin-bottom: 16px;">
             ${post.content}
           </div>
+
+          ${post.attachments && post.attachments.length ? `
+            <div class="post-attachments mb-3" style="display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; background: rgba(0,0,0,0.02); border-radius: var(--radius-md); border: 1px solid var(--border);">
+              ${post.attachments.map(att => {
+                if (att.contentType && att.contentType.startsWith('image/')) {
+                  return \`<a href="\${att.fileUrl}" target="_blank" class="attachment-img">
+                            <img src="\${att.fileUrl}" alt="\${att.fileName}" style="max-width: 200px; max-height: 200px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                          </a>\`;
+                }
+                return \`<a href="\${att.fileUrl}" target="_blank" class="attachment-file btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 6px; background: var(--bg-surface); border: 1px solid var(--border);">
+                          <i class="ti ti-paperclip" style="color: var(--accent);"></i> \${att.fileName}
+                        </a>\`;
+              }).join('')}
+            </div>
+          ` : ''}
 
           ${post.tags && post.tags.length ? `
             <div class="post-tags mb-3">

@@ -223,6 +223,25 @@ public class PostService : IPostService
         _context.Posts.Add(post);
         await _context.SaveChangesAsync();
 
+        // Add attachments
+        if (dto.Attachments != null && dto.Attachments.Any())
+        {
+            foreach (var att in dto.Attachments)
+            {
+                _context.PostAttachments.Add(new PostAttachment
+                {
+                    FileName = att.FileName,
+                    FileUrl = att.FileUrl ?? "",
+                    FileSize = att.FileSize,
+                    ContentType = att.ContentType ?? "application/octet-stream",
+                    PostId = post.Id,
+                    UploadedById = authorId,
+                    UploadedAt = DateTime.UtcNow
+                });
+            }
+            await _context.SaveChangesAsync();
+        }
+
         // Add tags
         if (dto.Tags != null && dto.Tags.Any())
         {

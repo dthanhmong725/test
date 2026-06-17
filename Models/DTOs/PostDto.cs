@@ -72,6 +72,8 @@ public class CreatePostDto
     public int CategoryId { get; set; }
 
     public List<string>? Tags { get; set; }
+
+    public List<AttachmentDto>? Attachments { get; set; }
 }
 
 public class UpdatePostDto
