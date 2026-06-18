@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<PostTag> PostTags => Set<PostTag>();
     public DbSet<PostAttachment> PostAttachments => Set<PostAttachment>();
     public DbSet<Bookmark> Bookmarks => Set<Bookmark>();
+    public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<Badge> Badges => Set<Badge>();
     public DbSet<UserBadge> UserBadges => Set<UserBadge>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
@@ -295,6 +296,22 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<UserUpload>()
             .HasIndex(u => u.UserId);
+
+        modelBuilder.Entity<Follow>()
+            .HasIndex(f => new { f.FollowerId, f.FollowingId })
+            .IsUnique();
+
+        modelBuilder.Entity<Follow>()
+            .HasOne(f => f.Follower)
+            .WithMany()
+            .HasForeignKey(f => f.FollowerId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Follow>()
+            .HasOne(f => f.Following)
+            .WithMany()
+            .HasForeignKey(f => f.FollowingId)
+            .OnDelete(DeleteBehavior.NoAction);
 
         // Seed default categories
         modelBuilder.Entity<Category>().HasData(

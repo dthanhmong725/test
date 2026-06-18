@@ -198,6 +198,12 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
     });
 
+// Thay thế hoặc chèn thêm ngay dưới nó đoạn cấu hình Route chuẩn hóa này:
+builder.Services.Configure<RouteOptions>(options =>
+{
+    options.LowercaseUrls = true; // Ép mọi API viết thường (/api/users/ thay vì /api/Users/)
+});
+
 builder.Services.AddRazorPages();
 
 var app = builder.Build();

@@ -1113,5 +1113,50 @@ body.cf-sidebar-collapsed .nav-item:hover::after {
 .ql-snow .ql-tooltip a.ql-remove::after {
   color: var(--accent) !important;
 }
+/* ==========================================================================
+   NÂNG CẤP HIỆU ỨNG GLOW NEON CHO NÚT BOOKMARK (HỖ TRỢ CẢ SÁNG & TỐI)
+   ========================================================================== */
 
+/* Trạng thái mặc định: Hiệu ứng Hover chuyển sắc mượt */
+.bookmark-btn {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+    .bookmark-btn:hover {
+        background: rgba(255, 255, 255, 0.08) !important;
+        transform: scale(1.08);
+    }
+
+    /* 🟢 TRẠNG THÁI ĐÃ LƯU (DARK/CYBER THEME) - Màu xanh Ngọc Neon tỏa sáng */
+    .bookmark-btn.bookmarked {
+        background: rgba(0, 229, 160, 0.12) !important;
+        border: 1px solid rgba(0, 229, 160, 0.3) !important;
+    }
+
+        .bookmark-btn.bookmarked i {
+            color: #00e5a0 !important; /* Ép màu thương hiệu --accent của bạn */
+            text-shadow: 0 0 10px rgba(0, 229, 160, 0.6) !important; /* Hiệu ứng phát sáng */
+        }
+
+/* 🟡 TRẠNG THÁI ĐÃ LƯU (LIGHT THEME OVERRIDE) - Chuyển sang màu Xanh Ngọc đậm đà */
+html[data-theme="light"] .bookmark-btn.bookmarked {
+    background: rgba(0, 184, 122, 0.12) !important;
+    border: 1px solid rgba(0, 184, 122, 0.25) !important;
+}
+
+    html[data-theme="light"] .bookmark-btn.bookmarked i {
+        color: #00b87a !important; /* Màu xanh lá đậm --accent của theme sáng */
+        text-shadow: 0 0 8px rgba(0, 184, 122, 0.4) !important;
+    }
+
+/* 🛠️ Sửa lỗi lệch trục tâm layout bài viết và sidebar bên phải */
+main .col-lg-8,
+main .col-lg-4 {
+    display: flex;
+    flex-direction: column;
+}
+
+main .card {
+    height: 100%; /* Ép phẳng chiều cao card để giao diện hai bên thẳng tắp đồng đều */
+}
 

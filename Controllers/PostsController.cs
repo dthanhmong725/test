@@ -51,15 +51,24 @@ public class PostsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreatePostDto dto)
+    public async Task<IActionResult> Create([FromBody] CreatePostWithAttachmentDto dto)
     {
         var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+
+        // Gọi Service tạo bài viết (Gợi ý: Nếu chưa sửa IPPostService, bạn hãy lưu tạm link file vào cuối Content 
+        // hoặc bổ sung thuộc tính FileUrl vào DTO tùy thuộc vào Service của bạn)
         var result = await _postService.CreateAsync(dto, userId);
 
         if (!result.Success)
             return BadRequest(result);
 
         return CreatedAtAction(nameof(GetById), new { id = result.Data?.Id }, result);
+    }
+    // Định nghĩa DTO nhận dữ liệu mới ở cuối file Controllers/PostsController.cs
+    public class CreatePostWithAttachmentDto : CreatePostDto
+    {
+        public string? AttachmentUrl { get; set; }
+        public string? AttachmentFileName { get; set; }
     }
 
     [HttpPut("{id}")]

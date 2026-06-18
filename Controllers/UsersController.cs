@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using DOAN_LAPTRINHWEB.Interfaces;
 using DOAN_LAPTRINHWEB.Models.DTOs;
 using DOAN_LAPTRINHWEB.Models.Entities;
 using DOAN_LAPTRINHWEB.Authorization;
+using DOAN_LAPTRINHWEB.Data;
 
 namespace DOAN_LAPTRINHWEB.Controllers;
 
@@ -14,11 +16,13 @@ public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
     private readonly IRoleService _roleService;
+    private readonly AppDbContext _context;
 
-    public UsersController(IUserService userService, IRoleService roleService)
+    public UsersController(IUserService userService, IRoleService roleService, AppDbContext context)
     {
         _userService = userService;
         _roleService = roleService;
+        _context = context;
     }
 
     [HttpGet("{id}")]
@@ -26,10 +30,7 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> GetById(int id)
     {
         var result = await _userService.GetByIdAsync(id);
-
-        if (!result.Success)
-            return NotFound(result);
-
+        if (!result.Success) return NotFound(result);
         return Ok(result);
     }
 
@@ -38,103 +39,51 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> GetProfile(string username)
     {
         var result = await _userService.GetPublicProfileAsync(username);
-
-        if (!result.Success)
-            return NotFound(result);
-
+        if (!result.Success) return NotFound(result);
         return Ok(result);
     }
 
-    /// <summary>Lấy thông tin user hiện tại (đang đăng nhập) - dùng cho settings page</summary>
-    [HttpGet("profile")]
-    public async Task<IActionResult> GetCurrentUserProfile()
+    [HttpGet("{targetUserId}/follow-status")]
+    public async Task<IActionResult> GetFollowStatus(int targetUserId)
     {
-        var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
-        var result = await _userService.GetByIdAsync(userId);
+        var currentUserId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+        var isFollowing = await _context.Follows.AnyAsync(f => f.FollowerId == currentUserId && f.FollowingId == targetUserId);
+        var isFollowedByTarget = await _context.Follows.AnyAsync(f => f.FollowerId == targetUserId && f.FollowingId == currentUserId);
 
-        if (!result.Success)
-            return NotFound(result);
-
-        return Ok(result);
+        return Ok(new { success = true, isFollowing, isMutual = (isFollowing && isFollowedByTarget) });
     }
 
-    [HttpPut("profile")]
-    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
+    [HttpPost("{targetUserId}/follow")]
+    public async Task<IActionResult> ToggleFollow(int targetUserId)
     {
-        var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
-        var result = await _userService.UpdateProfileAsync(userId, dto);
+        var currentUserId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+        if (currentUserId == targetUserId)
+            return BadRequest(new { success = false, message = "Bạn không thể tự theo dõi chính mình." });
 
-        if (!result.Success)
-            return BadRequest(result);
+        var existingFollow = await _context.Follows
+            .FirstOrDefaultAsync(f => f.FollowerId == currentUserId && f.FollowingId == targetUserId);
 
-        return Ok(result);
-    }
+        bool dynamicStatus;
+        if (existingFollow != null)
+        {
+            _context.Follows.Remove(existingFollow);
+            dynamicStatus = false;
+        }
+        else
+        {
+            _context.Follows.Add(new Follow { FollowerId = currentUserId, FollowingId = targetUserId });
+            dynamicStatus = true;
+        }
 
-    [HttpGet]
-    [Authorize(Policy = AuthorizationPolicies.RequireModerator)]
-    public async Task<IActionResult> GetUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 20,
-        [FromQuery] string? search = null, [FromQuery] string? role = null)
-    {
-        var result = await _userService.GetUsersAsync(page, pageSize, search, role);
-        return Ok(result);
-    }
+        await _context.SaveChangesAsync();
+        var isMutual = dynamicStatus && await _context.Follows.AnyAsync(f => f.FollowerId == targetUserId && f.FollowingId == currentUserId);
 
-    [HttpPut("{id}/role")]
-    [Authorize(Policy = AuthorizationPolicies.RequireAdmin)]
-    public async Task<IActionResult> ChangeRole(int id, [FromQuery] UserRole newRole)
-    {
-        var adminId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
-        var result = await _roleService.ChangeRoleAsync(adminId, id, newRole);
-
-        if (!result.Success)
-            return BadRequest(result);
-
-        return Ok(result);
-    }
-
-    [HttpPost("{id}/ban")]
-    [Authorize(Policy = AuthorizationPolicies.RequireAdmin)]
-    public async Task<IActionResult> BanUser(int id, [FromQuery] string reason = "Vi phạm nội quy")
-    {
-        var adminId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
-        var result = await _roleService.BanUserAsync(adminId, id, reason);
-
-        if (!result.Success)
-            return BadRequest(result);
-
-        return Ok(result);
-    }
-
-    [HttpPost("{id}/unban")]
-    [Authorize(Policy = AuthorizationPolicies.RequireAdmin)]
-    public async Task<IActionResult> UnbanUser(int id)
-    {
-        var adminId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
-        var result = await _roleService.UnbanUserAsync(adminId, id);
-
-        if (!result.Success)
-            return BadRequest(result);
-
-        return Ok(result);
-    }
-
-    [HttpGet("{id}/reputation")]
-    [AllowAnonymous]
-    public async Task<IActionResult> GetReputation(int id)
-    {
-        var result = await _userService.GetReputationAsync(id);
-
-        if (!result.Success)
-            return NotFound(result);
-
-        return Ok(result);
-    }
-
-    [HttpGet("leaderboard")]
-    [AllowAnonymous]
-    public async Task<IActionResult> GetLeaderboard([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
-    {
-        var result = await _userService.GetLeaderboardAsync(page, pageSize);
-        return Ok(result);
+        return Ok(new
+        {
+            success = true,
+            isFollowing = dynamicStatus,
+            isMutual,
+            message = dynamicStatus ? "Đã theo dõi chuyên gia thành công" : "Đã hủy theo dõi chuyên gia"
+        });
     }
 }
