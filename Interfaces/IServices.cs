@@ -6,7 +6,7 @@ namespace DOAN_LAPTRINHWEB.Interfaces;
 public interface IUserService
 {
     Task<ApiResponse<UserDto>> GetByIdAsync(int id);
-    Task<ApiResponse<PublicProfileDto>> GetPublicProfileAsync(string username);
+    Task<ApiResponse<PublicProfileDto>> GetPublicProfileAsync(string username, int? currentUserId = null);
     Task<ApiResponse<UserDto>> UpdateProfileAsync(int userId, UpdateProfileDto dto);
     Task<PaginatedResponse<PublicProfileDto>> GetUsersAsync(int page, int pageSize, string? search, string? role, int? currentUserId = null);
     Task<ApiResponse<ReputationDto>> GetReputationAsync(int userId);

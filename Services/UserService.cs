@@ -24,7 +24,7 @@ public class UserService : IUserService
         return ApiResponse<UserDto>.SuccessResponse(MapToUserDto(user));
     }
 
-    public async Task<ApiResponse<PublicProfileDto>> GetPublicProfileAsync(string username)
+    public async Task<ApiResponse<PublicProfileDto>> GetPublicProfileAsync(string username, int? currentUserId = null)
     {
         var user = await _context.Users
             .Include(u => u.Badges).ThenInclude(ub => ub.Badge)
@@ -34,6 +34,12 @@ public class UserService : IUserService
 
         if (user == null)
             return ApiResponse<PublicProfileDto>.ErrorResponse("User not found");
+
+        var isFollowing = false;
+        if (currentUserId.HasValue)
+        {
+            isFollowing = await _context.Follows.AnyAsync(f => f.FollowerId == currentUserId.Value && f.FollowingId == user.Id);
+        }
 
         return ApiResponse<PublicProfileDto>.SuccessResponse(new PublicProfileDto
         {
@@ -60,7 +66,8 @@ public class UserService : IUserService
                 ReputationRequired = ub.Badge.ReputationRequired,
                 IsEarned = true,
                 EarnedAt = ub.EarnedAt
-            }).ToList()
+            }).ToList(),
+            IsFollowing = isFollowing
         });
     }
 

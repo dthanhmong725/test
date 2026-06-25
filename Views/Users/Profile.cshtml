@@ -69,7 +69,14 @@
                             </div>
                             <div style="padding-top:52px; display:flex; gap:8px; flex-shrink:0;">
                                 ${isOwn ? `<a href="/users/settings" class="btn btn-secondary btn-sm"><i class="ti ti-settings"></i> Cài đặt</a>`
-                                        : `${_isAuthenticated ? `<button class="btn btn-primary btn-sm" onclick="toggleFollow('${u.username}', ${u.id})" id="followBtn">${u.isFollowing?'Đang theo dõi':'Theo dõi'}</button>` : ''}`}
+                                        : `
+                                            <button class="btn ${u.isFollowing ? 'btn-secondary' : 'btn-primary'} btn-sm" onclick="toggleFollow('${u.username}', ${u.id})" id="followBtn">
+                                                ${u.isFollowing ? 'Đang theo dõi' : 'Theo dõi'}
+                                            </button>
+                                            <button class="btn btn-outline-primary btn-sm" onclick="handleChatClick(${u.id})" id="chatBtn">
+                                                <i class="ti ti-message"></i> Nhắn tin
+                                            </button>
+                                          `}
                             </div>
                         </div>
                     </div>
@@ -111,11 +118,55 @@
         async function toggleFollow(username, userId) {
             if (!_isAuthenticated) { Toast.show('Vui lòng đăng nhập', 'warning'); return; }
             try {
-                const r = await API.users.follow(userId);
+                const r = await API.users.toggleFollow(userId);
                 const btn = document.getElementById('followBtn');
-                if (btn) btn.textContent = r.data ? 'Đang theo dõi' : 'Theo dõi';
-                Toast.show(r.data ? 'Đã theo dõi' : 'Đã bỏ theo dõi', 'success');
+                if (btn) {
+                    btn.textContent = r.isFollowing ? 'Đang theo dõi' : 'Theo dõi';
+                    if (r.isFollowing) {
+                        btn.className = "btn btn-secondary btn-sm";
+                    } else {
+                        btn.className = "btn btn-primary btn-sm";
+                    }
+                }
+                Toast.show(r.message || (r.isFollowing ? 'Đã theo dõi' : 'Đã bỏ theo dõi'), 'success');
             } catch (e) { Toast.show(e.message, 'error'); }
+        }
+
+        async function handleChatClick(targetUserId) {
+            if (!_isAuthenticated) { window.location.href = '/login.html'; return; }
+            try {
+                const btn = document.getElementById('followBtn');
+                const isFollowing = btn && btn.textContent.trim() === 'Đang theo dõi';
+                
+                if (!isFollowing) {
+                    Toast.show('Đang tự động theo dõi để nhắn tin...', 'info');
+                    const r = await API.users.toggleFollow(targetUserId);
+                    if (btn) {
+                        btn.textContent = r.isFollowing ? 'Đang theo dõi' : 'Theo dõi';
+                        if (r.isFollowing) {
+                            btn.className = "btn btn-secondary btn-sm";
+                        } else {
+                            btn.className = "btn btn-primary btn-sm";
+                        }
+                    }
+                    if (!r.isFollowing) {
+                        Toast.show('Không thể theo dõi đối phương', 'error');
+                        return;
+                    }
+                }
+
+                const res = await API.chat.initiateDirectChat(targetUserId);
+                if (res.success) {
+                    Toast.show('Đang thiết lập kết nối...', 'success');
+                    setTimeout(() => {
+                        window.location.href = `/chat.html?id=${res.chatId || res.data.id}`;
+                    }, 600);
+                } else {
+                    Toast.show(res.message, 'error');
+                }
+            } catch (e) {
+                Toast.show(e.message || 'Có lỗi xảy ra khi kết nối chat', 'error');
+            }
         }
     </script>
 }

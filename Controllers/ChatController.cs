@@ -5,6 +5,8 @@ using DOAN_LAPTRINHWEB.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
+using DOAN_LAPTRINHWEB.Hubs;
 
 namespace DOAN_LAPTRINHWEB.Controllers;
 
@@ -14,14 +16,14 @@ namespace DOAN_LAPTRINHWEB.Controllers;
 public class ChatController : ControllerBase
 {
     private readonly IChatService _chatService;
-    // BỔ SUNG KHAI BÁO BIẾN _context
     private readonly AppDbContext _context;
+    private readonly IHubContext<ChatHub> _hubContext;
 
-    // CẬP NHẬT HÀM KHỞI TẠO ĐỂ INJECT APPDBCONTEXT
-    public ChatController(IChatService chatService, AppDbContext context)
+    public ChatController(IChatService chatService, AppDbContext context, IHubContext<ChatHub> hubContext)
     {
         _chatService = chatService;
-        _context = context; // Gán giá trị để sử dụng được _context
+        _context = context;
+        _hubContext = hubContext;
     }
 
     [HttpGet("unread-count")]
@@ -108,6 +110,11 @@ public class ChatController : ControllerBase
 
         if (!result.Success)
             return BadRequest(result);
+
+        if (result.Data != null)
+        {
+            await _hubContext.Clients.Group($"room_{roomId}").SendAsync("NewMessage", result.Data);
+        }
 
         return Ok(result);
     }
@@ -219,9 +226,17 @@ public class ChatController : ControllerBase
         var isTargetFollowingMe = await _context.Follows
             .AnyAsync(f => f.FollowerId == targetUserId && f.FollowingId == currentUserId);
 
-        if (!isFollowingTarget || !isTargetFollowingMe)
+        if (!isFollowingTarget && !isTargetFollowingMe)
         {
-            return BadRequest(new { success = false, message = "Yêu cầu bảo mật: Hai thành viên phải bấm 'Theo dõi' lẫn nhau để kích hoạt phòng chat!" });
+            return BadRequest(new { success = false, message = "Cả hai bên phải theo dõi nhau mới có thể nhắn tin!" });
+        }
+        else if (!isFollowingTarget)
+        {
+            return BadRequest(new { success = false, message = "Bạn phải theo dõi đối phương trước khi nhắn tin!" });
+        }
+        else if (!isTargetFollowingMe)
+        {
+            return BadRequest(new { success = false, message = "Đối phương chưa theo dõi bạn. Cần theo dõi chéo mới có thể nhắn tin!" });
         }
 
         // 2. Tìm xem trước đó đã có phòng chat Direct nào giữa 2 người này chưa

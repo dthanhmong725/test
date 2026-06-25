@@ -57,7 +57,17 @@ public class UsersController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GetProfile(string username)
     {
-        var result = await _userService.GetPublicProfileAsync(username);
+        int? currentUserId = null;
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(userIdClaim, out var parsedId))
+            {
+                currentUserId = parsedId;
+            }
+        }
+
+        var result = await _userService.GetPublicProfileAsync(username, currentUserId);
         if (!result.Success) return NotFound(result);
         return Ok(result);
     }

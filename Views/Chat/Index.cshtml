@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
     <style>
         body { overflow: hidden; }
-        .chat-container { display:flex; height:calc(100vh - var(--navbar-height)); margin-top:var(--navbar-height); background:var(--bg-primary); }
+        .chat-container { display:flex !important; flex-direction:row !important; height:calc(100vh - var(--navbar-height)); margin-top:var(--navbar-height); background:var(--bg-primary); }
         .chat-sidebar { width:320px; border-right:1px solid var(--border); display:flex; flex-direction:column; background:var(--bg-surface); transition:width 0.3s, transform 0.3s; }
         .chat-sidebar.collapsed { transform:translateX(-100%); margin-left:-320px; width:0; }
         @@media(max-width:768px) { .chat-sidebar { position:absolute; z-index:100; height:100%; } .chat-sidebar.collapsed { transform:translateX(-100%); } }
@@ -48,6 +48,14 @@
         .typing-dot { width:6px; height:6px; border-radius:50%; background:var(--text-muted); animation:typeBounce 1.2s infinite ease-in-out; }
         .typing-dot:nth-child(2) { animation-delay:0.15s; } .typing-dot:nth-child(3) { animation-delay:0.3s; }
         @@keyframes typeBounce { 0%,60%,100%{transform:translateY(0);opacity:0.4} 30%{transform:translateY(-4px);opacity:1} }
+        
+        /* CHAT MESSAGE WRAPPER & REACTIONS */
+        .chat-message-wrapper { display:flex; align-items:center; gap:8px; width:100%; margin-bottom:4px; position:relative; }
+        .chat-message-wrapper.own { justify-content:flex-end; }
+        .chat-message-wrapper.other { justify-content:flex-start; }
+        .chat-message-actions { opacity:0; transition:opacity 0.2s; display:flex; gap:4px; }
+        .chat-message-wrapper:hover .chat-message-actions { opacity:1; }
+        .reaction-pill:hover { background:var(--bg-hover) !important; transform:scale(1.05); }
     </style>
 </head>
 <body>
@@ -114,6 +122,9 @@
                 <div class="chat-input-area">
                     <div class="chat-input-wrapper">
                         <input type="text" class="chat-input" id="messageInput" placeholder="Nhập tin nhắn..." autocomplete="off">
+                        <button class="btn btn-ghost btn-icon p-0" id="emojiBtn" style="color:var(--text-muted); width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:none; background:transparent;" title="Chèn emoji">
+                            <i class="ti ti-mood-smile" style="font-size:1.25rem;"></i>
+                        </button>
                     </div>
                     <button class="chat-send-btn" onclick="sendMessage()" id="sendBtn" title="Gửi (Enter)">
                         <i class="ti ti-send"></i>
@@ -170,6 +181,7 @@
             newRoomModal = new bootstrap.Modal(document.getElementById('newRoomModal'));
             setupMemberInput();
             setupMessageInput();
+            setupEmojiPicker();
             await loadChatRooms();
             await initSignalR();
         });
@@ -189,6 +201,9 @@
             });
             connection.on('TypingStarted', (username) => { if(username !== _currentUsername) showTyping(username); });
             connection.on('TypingStopped', () => hideTyping());
+            connection.on('MessageReaction', (data) => {
+                if (currentRoomId) updateMessageReactions(data.messageId || data.MessageId, data.reactions || data.Reactions);
+            });
             try { await connection.start(); updateStatus('connected'); }
             catch { updateStatus('disconnected'); setTimeout(initSignalR, 5000); }
         }
@@ -254,20 +269,186 @@
 
         function appendMessage(msg) {
             const c = document.getElementById('chatMessages');
-            const isOwn = (msg.senderId||msg.SenderId) === _currentUserId;
-            const senderName = msg.senderUsername || msg.SenderUsername || 'Unknown';
+            const isOwn = (msg.senderId || msg.SenderId || msg.sender?.id || msg.Sender?.Id) === _currentUserId;
+            const senderName = msg.sender?.displayName || msg.Sender?.DisplayName || msg.sender?.username || msg.Sender?.Username || msg.senderUsername || msg.SenderUsername || 'Unknown';
             const content = msg.content || msg.Content || '';
             const time = new Date(msg.sentAt||msg.SentAt||Date.now()).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
+            const replyContent = msg.replyTo?.content || msg.ReplyTo?.Content || msg.replyToContent || msg.ReplyToContent || 'Tin nhắn đã xóa';
 
             const div = document.createElement('div');
-            div.className = `chat-message ${isOwn?'own':'other'}`;
-            div.id = `msg-${msg.id||msg.Id}`;
-            div.innerHTML = `
-                ${!isOwn?`<span class="chat-message-sender">${escHtml(senderName)}</span>`:''}
-                ${msg.replyToId?`<div style="font-size:0.75rem; padding:4px 8px; background:rgba(0,0,0,0.15); border-left:3px solid var(--accent); border-radius:4px; margin-bottom:4px; opacity:0.85;">${escHtml(msg.replyToContent||'Tin nhắn đã xóa')}</div>`:''}
-                <div class="chat-message-content">${escHtml(content)}</div>
-                <div class="chat-message-meta">${time}</div>`;
+            div.className = `chat-message-wrapper ${isOwn?'own':'other'}`;
+            
+            const msgId = msg.id || msg.Id;
+            const messageHtml = `
+                <div class="chat-message ${isOwn?'own':'other'}" id="msg-${msgId}" style="position:relative;">
+                    ${!isOwn?`<span class="chat-message-sender">${escHtml(senderName)}</span>`:''}
+                    ${msg.replyToId?`<div style="font-size:0.75rem; padding:4px 8px; background:rgba(0,0,0,0.15); border-left:3px solid var(--accent); border-radius:4px; margin-bottom:4px; opacity:0.85;">${escHtml(replyContent)}</div>`:''}
+                    <div class="chat-message-content">${escHtml(content)}</div>
+                    ${renderReactionsHtml(msg.reactions||msg.Reactions, msgId)}
+                    <div class="chat-message-meta">${time}</div>
+                </div>
+            `;
+
+            const actionsHtml = `
+                <div class="chat-message-actions">
+                    <button class="btn btn-ghost btn-icon p-0" onclick="showReactionPicker(${msgId}, this, event)" style="width:28px; height:28px; color:var(--text-muted); border-radius:50%; border:none; background:transparent;" title="Bày tỏ cảm xúc">
+                        <i class="ti ti-mood-smile" style="font-size:1.1rem;"></i>
+                    </button>
+                </div>
+            `;
+
+            if (isOwn) {
+                div.innerHTML = actionsHtml + messageHtml;
+            } else {
+                div.innerHTML = messageHtml + actionsHtml;
+            }
             c.appendChild(div);
+        }
+
+        function renderReactionsHtml(reactions, messageId) {
+            if (!reactions || !reactions.length) return '';
+            const groups = {};
+            reactions.forEach(r => {
+                const emoji = r.emoji || r.Emoji;
+                const username = r.username || r.Username || '';
+                if (!groups[emoji]) groups[emoji] = { count: 0, users: [] };
+                groups[emoji].count++;
+                groups[emoji].users.push(username);
+            });
+
+            return `
+                <div class="message-reactions" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">
+                    ${Object.entries(groups).map(([emoji, info]) => {
+                        const title = info.users.join(', ');
+                        const isMyReaction = info.users.includes(_currentUsername);
+                        const activeStyle = isMyReaction ? 'border-color:var(--accent); background:rgba(0,229,160,0.1);' : '';
+                        return `
+                            <span class="reaction-pill" onclick="reactToMessage(${messageId}, '${emoji}')" title="${escHtml(title)}" 
+                                  style="display:inline-flex; align-items:center; gap:2px; font-size:0.75rem; background:var(--bg-surface2); border:1px solid var(--border); padding:2px 6px; border-radius:10px; cursor:pointer; user-select:none; transition:background 0.15s; ${activeStyle}">
+                                <span>${emoji}</span>
+                                <span style="font-weight:600; color:var(--text-secondary);">${info.count}</span>
+                            </span>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function updateMessageReactions(messageId, reactions) {
+            const msgEl = document.getElementById(`msg-${messageId}`);
+            if (!msgEl) return;
+            let reactionsEl = msgEl.querySelector('.message-reactions');
+            if (reactionsEl) {
+                reactionsEl.remove();
+            }
+            if (reactions && reactions.length) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = renderReactionsHtml(reactions, messageId);
+                const newReactionsEl = tempDiv.firstElementChild;
+                const metaEl = msgEl.querySelector('.chat-message-meta');
+                msgEl.insertBefore(newReactionsEl, metaEl);
+            }
+        }
+
+        let activeReactionMessageId = null;
+        function showReactionPicker(messageId, buttonEl, event) {
+            event.stopPropagation();
+            activeReactionMessageId = messageId;
+            
+            let picker = document.getElementById('globalReactionPicker');
+            if (!picker) {
+                picker = document.createElement('div');
+                picker.id = 'globalReactionPicker';
+                picker.style.cssText = 'position:absolute; padding:6px; display:flex; gap:6px; border:1px solid var(--border); border-radius:20px; z-index:2000; box-shadow:var(--shadow-md); background:var(--bg-surface-solid);';
+                const emojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+                picker.innerHTML = emojis.map(e => `
+                    <span class="reaction-emoji-item" onclick="selectReaction('${e}')" style="font-size:1.25rem; cursor:pointer; padding:2px 4px; transition:transform 0.1s; display:inline-block; user-select:none;">${e}</span>
+                `).join('');
+                document.body.appendChild(picker);
+                
+                picker.querySelectorAll('.reaction-emoji-item').forEach(el => {
+                    el.addEventListener('mouseenter', () => el.style.transform = 'scale(1.3)');
+                    el.addEventListener('mouseleave', () => el.style.transform = 'scale(1)');
+                });
+            }
+            
+            const rect = buttonEl.getBoundingClientRect();
+            picker.style.display = 'flex';
+            picker.style.top = `${rect.top + window.scrollY - 36}px`;
+            picker.style.left = `${rect.left + window.scrollX - 60}px`;
+            
+            const closePicker = () => {
+                picker.style.display = 'none';
+                document.removeEventListener('click', closePicker);
+            };
+            setTimeout(() => document.addEventListener('click', closePicker), 10);
+        }
+
+        function selectReaction(emoji) {
+            if (activeReactionMessageId) {
+                reactToMessage(activeReactionMessageId, emoji);
+            }
+        }
+
+        async function reactToMessage(messageId, emoji) {
+            try {
+                if (connection && connection.state === 'Connected') {
+                    await connection.invoke('ToggleReaction', messageId, emoji);
+                }
+            } catch (e) {
+                Toast.show('Không thể bày tỏ cảm xúc', 'error');
+            }
+        }
+
+        function setupEmojiPicker() {
+            const btn = document.getElementById('emojiBtn');
+            const input = document.getElementById('messageInput');
+            if (!btn || !input) return;
+            
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                let picker = document.getElementById('inputEmojiPicker');
+                if (!picker) {
+                    picker = document.createElement('div');
+                    picker.id = 'inputEmojiPicker';
+                    picker.style.cssText = 'position:absolute; display:grid; grid-template-columns:repeat(6,1fr); gap:6px; padding:8px; border:1px solid var(--border); border-radius:12px; z-index:2000; box-shadow:var(--shadow-md); background:var(--bg-surface-solid); max-width:200px;';
+                    const emojis = [
+                        '👍', '❤️', '😂', '😮', '😢', '🙏',
+                        '🎉', '🔥', '🚀', '💯', '👏', '✔️',
+                        '🤔', '🤷', '💀', '👀', '😊', '😍'
+                    ];
+                    picker.innerHTML = emojis.map(emoji => `
+                        <span class="input-emoji-item" style="font-size:1.2rem; cursor:pointer; text-align:center; padding:4px; user-select:none; display:inline-block; transition:transform 0.1s;">${emoji}</span>
+                    `).join('');
+                    document.body.appendChild(picker);
+                    
+                    picker.querySelectorAll('.input-emoji-item').forEach(el => {
+                        el.addEventListener('mouseenter', () => el.style.transform = 'scale(1.2)');
+                        el.addEventListener('mouseleave', () => el.style.transform = 'scale(1)');
+                        el.onclick = (event) => {
+                            event.stopPropagation();
+                            const val = input.value;
+                            const start = input.selectionStart || 0;
+                            const end = input.selectionEnd || 0;
+                            input.value = val.substring(0, start) + el.textContent + val.substring(end);
+                            input.focus();
+                            const cursorOffset = start + el.textContent.length;
+                            input.setSelectionRange(cursorOffset, cursorOffset);
+                        };
+                    });
+                }
+                
+                const rect = btn.getBoundingClientRect();
+                picker.style.display = 'grid';
+                picker.style.top = `${rect.top + window.scrollY - picker.offsetHeight - 8}px`;
+                picker.style.left = `${rect.left + window.scrollX - picker.offsetWidth + 32}px`;
+                
+                const closePicker = () => {
+                    picker.style.display = 'none';
+                    document.removeEventListener('click', closePicker);
+                };
+                setTimeout(() => document.addEventListener('click', closePicker), 10);
+            });
         }
 
         function scrollToBottom() {

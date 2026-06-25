@@ -16,36 +16,71 @@
                value="@Html.Raw(query)" autofocus>
     </div>
 
-    <div id="resultsInfo" style="margin-bottom:16px; font-size:0.875rem; color:var(--text-muted);"></div>
+    <!-- Users section -->
+    <div id="usersSection" style="display: none; margin-bottom: 24px;">
+        <h2 style="font-size: 1rem; display: flex; align-items: center; gap: 6px; margin-bottom: 10px;">
+            <i class="ti ti-users" style="color: var(--text-muted);"></i> Thành viên
+        </h2>
+        <div id="usersList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        <button id="showMoreUsersBtn" class="btn btn-ghost" style="display: none; margin-top: 8px; width: 100%; font-size: 0.8125rem;">
+            Xem thêm thành viên <i class="ti ti-chevron-down"></i>
+        </button>
+    </div>
 
-    <div id="searchResults">
-        @if (!string.IsNullOrEmpty(query))
-        {
-            <div class="skeleton" style="height:100px; margin-bottom:12px;"></div>
-            <div class="skeleton" style="height:100px; margin-bottom:12px;"></div>
-            <div class="skeleton" style="height:100px;"></div>
-        }
-        else
-        {
-            <div class="empty-state">
-                <i class="ti ti-search"></i>
-                <h3>Tìm kiếm bài viết</h3>
-                <p>Nhập từ khóa để tìm kiếm bài viết, thành viên trong diễn đàn</p>
-            </div>
-        }
+    <div id="dividerLine" style="border-top: 1px solid var(--border); margin-bottom: 20px; display: none;"></div>
+
+    <div id="postsSection">
+        <div class="d-flex justify-content-between align-items-center mb-4" id="postsHeader" style="margin-bottom: 16px; display: none;">
+            <h2 style="font-size: 1rem; margin: 0; display: flex; align-items: center; gap: 6px;">
+                <i class="ti ti-news" style="color: var(--text-muted);"></i> Bài viết
+            </h2>
+            <select id="sortSelect" class="form-select" style="width: auto; padding: 6px 12px;">
+                <option value="">Mới nhất</option>
+                <option value="views">Xem nhiều nhất</option>
+                <option value="comments">Bình luận nhiều nhất</option>
+                <option value="oldest">Cũ nhất</option>
+            </select>
+        </div>
+
+        <div id="resultsInfo" style="margin-bottom: 16px; font-size: 0.875rem; color: var(--text-muted);"></div>
+
+        <div id="searchResults">
+            @if (!string.IsNullOrEmpty(query))
+            {
+                <div class="skeleton" style="height:100px; margin-bottom:12px;"></div>
+                <div class="skeleton" style="height:100px; margin-bottom:12px;"></div>
+                <div class="skeleton" style="height:100px;"></div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <i class="ti ti-search"></i>
+                    <h3>Tìm kiếm trên CyberForum</h3>
+                    <p>Nhập từ khóa để tìm kiếm bài viết, thành viên trong diễn đàn</p>
+                </div>
+            }
+        </div>
     </div>
 
     <div id="pagination" class="pagination"></div>
 </section>
 
 @section Scripts {
+    @{
+        var isAuth = User.Identity!.IsAuthenticated;
+    }
     <script>
-        const _initialQuery = '@Html.Raw(query.Replace("'", "\\'"))';
+        const _isAuthenticated = @(isAuth ? "true" : "false");
+        let _initialQuery = '@Html.Raw(query.Replace("'", "\\'"))';
         let searchTimeout;
         let currentPage = 1;
+        let allUsersResult = [];
+        let showAllUsers = false;
+        let currentQuery = _initialQuery;
 
         document.addEventListener('DOMContentLoaded', () => {
             if (_initialQuery) runSearch(_initialQuery, 1);
+            
             const input = document.getElementById('searchInput');
             input.addEventListener('input', (e) => {
                 clearTimeout(searchTimeout);
@@ -53,31 +88,165 @@
                     const q = e.target.value.trim();
                     if (q.length >= 2) runSearch(q, 1);
                     else if (!q) {
-                        document.getElementById('searchResults').innerHTML = `<div class="empty-state"><i class="ti ti-search"></i><h3>Tìm kiếm bài viết</h3><p>Nhập từ khóa để tìm kiếm</p></div>`;
+                        currentQuery = '';
+                        document.getElementById('usersSection').style.display = 'none';
+                        document.getElementById('dividerLine').style.display = 'none';
+                        document.getElementById('postsHeader').style.display = 'none';
+                        document.getElementById('searchResults').innerHTML = `<div class="empty-state"><i class="ti ti-search"></i><h3>Tìm kiếm trên CyberForum</h3><p>Nhập từ khóa để tìm kiếm</p></div>`;
                         document.getElementById('resultsInfo').textContent = '';
                         document.getElementById('pagination').innerHTML = '';
                     }
                 }, 400);
             });
+
+            const sortSelect = document.getElementById('sortSelect');
+            if (sortSelect) {
+                sortSelect.addEventListener('change', () => {
+                    if (currentQuery) loadPosts(currentQuery, 1);
+                });
+            }
         });
 
         async function runSearch(q, page = 1) {
+            currentQuery = q;
             currentPage = page;
-            const c = document.getElementById('searchResults');
-            c.innerHTML = '<div class="skeleton" style="height:100px; margin-bottom:12px;"></div><div class="skeleton" style="height:100px;"></div>';
+
+            if (page === 1) {
+                await loadUsers(q);
+            }
+            await loadPosts(q, page);
+
+            history.replaceState(null, '', `/search?q=${encodeURIComponent(q)}`);
+        }
+
+        async function loadUsers(q) {
+            const section = document.getElementById('usersSection');
+            const list = document.getElementById('usersList');
+            const showMoreBtn = document.getElementById('showMoreUsersBtn');
+            const divider = document.getElementById('dividerLine');
+
+            if (!q.trim()) {
+                section.style.display = 'none';
+                divider.style.display = 'none';
+                return;
+            }
+
             try {
-                const r = await API.posts.search({ q, page, pageSize: 10 });
+                const result = await API.users.searchUsers({ q, page: 1, pageSize: 20 });
+                if (!result.success || !result.data || !result.data.length) {
+                    section.style.display = 'none';
+                    divider.style.display = 'none';
+                    return;
+                }
+
+                allUsersResult = result.data;
+                showAllUsers = false;
+                section.style.display = 'block';
+                divider.style.display = 'block';
+                renderUsersList();
+
+                showMoreBtn.style.display = allUsersResult.length > 3 ? 'block' : 'none';
+                showMoreBtn.onclick = () => {
+                    showAllUsers = true;
+                    renderUsersList();
+                    showMoreBtn.style.display = 'none';
+                };
+            } catch (e) {
+                section.style.display = 'none';
+                divider.style.display = 'none';
+            }
+        }
+
+        function renderUsersList() {
+            const list = document.getElementById('usersList');
+            const visibleUsers = showAllUsers ? allUsersResult : allUsersResult.slice(0, 3);
+            list.innerHTML = visibleUsers.map(u => renderUserCard(u)).join('');
+        }
+
+        function renderUserCard(user) {
+            const currentUser = AuthManager.getUser();
+            const isOwn = currentUser && currentUser.id === user.id;
+            const followBtnHtml = isOwn ? '' : `
+                <button class="btn ${user.isFollowing ? 'btn-secondary' : 'btn-primary'} follow-btn"
+                  data-user-id="${user.id}"
+                  data-following="${user.isFollowing ? 'true' : 'false'}"
+                  onclick="toggleFollow(${user.id}, this)"
+                  style="font-size: 0.8125rem; padding: 6px 14px; white-space: nowrap;">
+                  ${user.isFollowing ? '<i class="ti ti-check"></i> Đang theo dõi' : '<i class="ti ti-plus"></i> Theo dõi'}
+                </button>`;
+
+            const displayName = user.displayName || user.username;
+            const avatarChar = displayName.charAt(0).toUpperCase();
+            const avatarHtml = user.avatarUrl 
+                ? `<img src="${user.avatarUrl}" alt="${escHtml(displayName)}" style="width:100%; height:100%; object-fit:cover;">`
+                : avatarChar;
+
+            return `
+                <div class="card" style="padding: 12px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                  <a href="/users/profile?username=${user.username}" style="flex-shrink: 0; text-decoration: none;">
+                    <div class="avatar avatar-md">${avatarHtml}</div>
+                  </a>
+                  <div style="flex: 1; min-width: 0;">
+                    <a href="/users/profile?username=${user.username}" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                      <span style="font-weight: 600; font-size: 0.9375rem;">${escHtml(displayName)}</span>
+                      ${AuthManager.renderRoleBadge ? AuthManager.renderRoleBadge(user.role) : ''}
+                    </a>
+                    <div style="color: var(--text-muted); font-size: 0.8125rem;">
+                      @@${escHtml(user.username)} · ${user.reputationPoints || 0} điểm · ${user.postCount || 0} bài viết
+                    </div>
+                  </div>
+                  ${followBtnHtml}
+                </div>`;
+        }
+
+        async function toggleFollow(userId, btn) {
+            if (!_isAuthenticated) {
+                Toast.show('Vui lòng đăng nhập để theo dõi người dùng', 'warning');
+                return;
+            }
+            const wasFollowing = btn.dataset.following === 'true';
+            btn.disabled = true;
+            try {
+                const result = await API.users.toggleFollow(userId);
+                const nowFollowing = result.isFollowing;
+                btn.dataset.following = nowFollowing ? 'true' : 'false';
+                btn.className = `btn ${nowFollowing ? 'btn-secondary' : 'btn-primary'} follow-btn`;
+                btn.innerHTML = nowFollowing
+                  ? '<i class="ti ti-check"></i> Đang theo dõi'
+                  : '<i class="ti ti-plus"></i> Theo dõi';
+
+                const userInArray = allUsersResult.find(u => u.id === userId);
+                if (userInArray) userInArray.isFollowing = nowFollowing;
+
+                Toast.show(result.message || (nowFollowing ? 'Đã theo dõi' : 'Đã hủy theo dõi'), 'success');
+            } catch (e) {
+                Toast.show(e.message || 'Có lỗi xảy ra', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function loadPosts(q, page = 1) {
+            const container = document.getElementById('searchResults');
+            const postsHeader = document.getElementById('postsHeader');
+            const info = document.getElementById('resultsInfo');
+            const sort = document.getElementById('sortSelect').value;
+
+            container.innerHTML = '<div class="skeleton" style="height:100px; margin-bottom:12px;"></div><div class="skeleton" style="height:100px;"></div>';
+            postsHeader.style.display = 'none';
+
+            try {
+                const r = await API.posts.getAll({ page, pageSize: 10, search: q, sortBy: sort });
                 if (r.success) {
-                    const info = document.getElementById('resultsInfo');
-                    info.textContent = r.totalCount !== undefined ? `Tìm thấy ${r.totalCount} kết quả cho "${q}"` : '';
+                    postsHeader.style.display = 'flex';
+                    info.textContent = r.totalItems !== undefined ? `Tìm thấy ${r.totalItems} kết quả cho "${q}"` : '';
                     renderResults(r.data, q);
                     renderPagination(r, q);
-                    history.replaceState(null, '', `/search?q=${encodeURIComponent(q)}`);
                 } else {
-                    c.innerHTML = '<p class="text-muted">Không thể tìm kiếm</p>';
+                    container.innerHTML = '<p class="text-muted">Không thể tìm kiếm</p>';
                 }
             } catch (e) {
-                c.innerHTML = '<p class="text-muted">Không thể thực hiện tìm kiếm</p>';
+                container.innerHTML = '<p class="text-muted">Không thể thực hiện tìm kiếm</p>';
             }
         }
 
@@ -94,22 +263,38 @@
                 return;
             }
             c.innerHTML = posts.map(p => `
-                <article class="card mb-3" style="padding:16px;">
-                    <a href="/posts/${p.id}" style="text-decoration:none;">
-                        <h3 style="font-size:1.0625rem; color:var(--text-primary); margin-bottom:6px; line-height:1.4;">
-                            ${highlight(p.title, q)}
-                        </h3>
-                    </a>
-                    <p style="font-size:0.8125rem; color:var(--text-muted); margin-bottom:8px; line-height:1.5; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">
-                        ${highlight(p.excerpt || '', q)}
-                    </p>
-                    <div style="display:flex; gap:12px; font-size:0.75rem; color:var(--text-muted); align-items:center; flex-wrap:wrap;">
-                        <a href="/users/profile?username=${p.authorUsername}" style="color:inherit; text-decoration:none;">${p.authorUsername}</a>
-                        <a href="/categories/${p.categorySlug}" class="category-tag ${p.categorySlug}" style="font-size:0.7rem; text-decoration:none;">${p.categoryName}</a>
-                        <span><i class="ti ti-eye"></i> ${p.viewCount}</span>
-                        <span><i class="ti ti-message"></i> ${p.commentCount}</span>
-                        <span><i class="ti ti-clock"></i> ${new Date(p.createdAt).toLocaleDateString('vi-VN')}</span>
+                <article class="post-card ${p.isPinned ? 'pinned' : ''}">
+                    <div class="post-votes">
+                        <button class="vote-btn ${p.userVote === 1 ? 'upvoted' : ''}" onclick="votePost(${p.id}, true)"><i class="ti ti-arrow-up"></i></button>
+                        <span class="vote-count ${(p.upvoteCount - p.downvoteCount) > 0 ? 'positive' : (p.upvoteCount - p.downvoteCount) < 0 ? 'negative' : ''}">${p.upvoteCount - p.downvoteCount}</span>
+                        <button class="vote-btn ${p.userVote === -1 ? 'downvoted' : ''}" onclick="votePost(${p.id}, false)"><i class="ti ti-arrow-down"></i></button>
                     </div>
+                    <div class="post-content">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <a href="/posts/${p.id}" class="post-title" style="text-decoration:none;">
+                                ${p.isPinned ? '<span class="badge badge-success" style="margin-right:6px; font-size:0.625rem;"><i class="ti ti-pinned"></i> Đã ghim</span>' : ''}${highlight(p.title, q)}
+                            </a>
+                            ${p.isLocked ? '<i class="ti ti-lock" style="color:var(--text-muted); flex-shrink:0;"></i>' : ''}
+                        </div>
+                        <p style="font-size:0.8125rem; color:var(--text-muted); margin-top:6px; margin-bottom:8px; line-height:1.5; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">
+                            ${highlight(p.excerpt || '', q)}
+                        </p>
+                        <div class="post-meta">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="avatar avatar-sm">${(p.authorUsername||'U').charAt(0).toUpperCase()}</div>
+                                <a href="/users/profile?username=${p.authorUsername}" style="color:inherit; text-decoration:none;">${p.authorUsername}${p.authorRole && p.authorRole !== 'User' ? (AuthManager.renderRoleBadge ? AuthManager.renderRoleBadge(p.authorRole) : '') : ''}</a>
+                            </div>
+                            <span class="post-meta-item"><i class="ti ti-clock"></i> ${formatTimeAgo(p.createdAt)}</span>
+                            <span class="post-meta-item"><i class="ti ti-eye"></i> ${p.viewCount}</span>
+                            <span class="post-meta-item"><i class="ti ti-message"></i> ${p.commentCount}</span>
+                            <a href="/categories/${p.categorySlug}" class="category-tag ${p.categorySlug}" style="text-decoration:none;">${p.categoryName}</a>
+                        </div>
+                        ${p.tags && p.tags.length ? `<div class="post-tags">${p.tags.map(t=>`<span class="post-tag">${t}</span>`).join('')}</div>` : ''}
+                    </div>
+                    <button class="btn btn-ghost bookmark-btn ${p.isBookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark(${p.id}, this)"
+                        style="align-self:flex-start; color:${p.isBookmarked ? 'var(--accent)' : ''};">
+                        <i class="${p.isBookmarked ? 'ti ti-bookmark-filled' : 'ti ti-bookmark'}"></i>
+                    </button>
                 </article>`).join('');
         }
 
@@ -124,6 +309,49 @@
             }
             if (result.hasNextPage) html += `<button class="pagination-btn" onclick="runSearch('${q}', ${result.page+1})"><i class="ti ti-chevron-right"></i></button>`;
             c.innerHTML = html;
+        }
+
+        async function votePost(postId, isUpvote) {
+            if (!_isAuthenticated) { Toast.show('Vui lòng đăng nhập để bình chọn', 'warning'); return; }
+            try { 
+                await API.posts.vote(postId, isUpvote); 
+                await loadPosts(currentQuery, currentPage); 
+            }
+            catch (e) { Toast.show(e.message, 'error'); }
+        }
+
+        const _bkDebounce = new Map();
+        async function toggleBookmark(postId, btn) {
+            if (!_isAuthenticated) { Toast.show('Vui lòng đăng nhập để lưu bài', 'warning'); return; }
+            const now = Date.now();
+            if (now - (_bkDebounce.get(postId)||0) < 300) return;
+            _bkDebounce.set(postId, now);
+            const isBk = btn.classList.contains('bookmarked');
+            const setUI = (active) => {
+                btn.classList.toggle('bookmarked', active);
+                btn.style.color = active ? 'var(--accent)' : '';
+                btn.querySelector('i').className = active ? 'ti ti-bookmark-filled' : 'ti ti-bookmark';
+            };
+            setUI(!isBk);
+            try {
+                const r = await API.bookmarks.toggle(postId);
+                if (!r.success) { setUI(isBk); Toast.show(r.message||'Có lỗi xảy ra', 'error'); }
+                else Toast.show(r.data ? 'Đã lưu bài viết' : 'Đã bỏ lưu', 'success');
+            } catch { setUI(isBk); Toast.show('Có lỗi xảy ra', 'error'); }
+        }
+
+        function formatTimeAgo(d) {
+            const s = Math.floor((new Date()-new Date(d))/1000);
+            if (s<60) return 'vài giây trước';
+            if (s<3600) return `${Math.floor(s/60)} phút trước`;
+            if (s<86400) return `${Math.floor(s/3600)} giờ trước`;
+            if (s<604800) return `${Math.floor(s/86400)} ngày trước`;
+            return new Date(d).toLocaleDateString('vi-VN',{day:'numeric',month:'short',year:'numeric'});
+        }
+
+        function escHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
     </script>
 }
